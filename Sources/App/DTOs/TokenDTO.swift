@@ -1,6 +1,6 @@
 import Vapor
 
 struct TokenDTO: Content {
-    let value: String
+    let tokenValue: String
     let user: UserDTO.Public
 }

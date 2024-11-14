@@ -13,14 +13,14 @@ struct UserController: RouteCollection {
     }
     
     @Sendable
-    func create(req: Request) async throws -> UserDTO.Public {
+    func create(req: Request) async throws -> TokenDTO {
         try UserDTO.validate(content: req)
         
         let user = try req.content.decode(UserDTO.self).toModel()
         user.password = try Bcrypt.hash(user.password)
         try await user.save(on: req.db)
         
-        return user.toDTO().toPublic()
+        return try await newToken(for: user, db: req.db)
     }
     
     @Sendable
@@ -31,11 +31,15 @@ struct UserController: RouteCollection {
             .filter(\.$user.$id == user.requireID())
             .first()
         else {
-            let newToken = try Token.generate(for: user)
-            try await newToken.save(on: req.db)
-            return try await newToken.toDTO(db: req.db)
+            return try await newToken(for: user, db: req.db)
         }
         
         return try await existedToken.toDTO(db: req.db)
+    }
+    
+    private func newToken(for user: User, db: Database) async throws -> TokenDTO {
+        let newToken = try Token.generate(for: user)
+        try await newToken.save(on: db)
+        return try await newToken.toDTO(db: db)
     }
 }

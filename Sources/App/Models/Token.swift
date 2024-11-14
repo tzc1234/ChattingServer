@@ -36,6 +36,6 @@ extension Token {
 extension Token {
     func toDTO(db: Database) async throws -> TokenDTO {
         try await $user.load(on: db)
-        return TokenDTO(value: tokenValue, user: user.toDTO().toPublic())
+        return TokenDTO(tokenValue: tokenValue, user: user.toDTO().toPublic())
     }
 }
