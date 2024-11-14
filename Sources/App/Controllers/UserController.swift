@@ -3,17 +3,17 @@ import Vapor
 
 struct UserController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {
-        let user = routes.grouped("user")
-        user.post(use: create)
+        let register = routes.grouped("register")
+        register.post(use: create)
         
-        let userAuth = routes.grouped("login")
+        let login = routes.grouped("login")
             .grouped(UserAuthenticator())
             .grouped(User.guardMiddleware())
-        userAuth.post(use: login)
+        login.post(use: handleLogin)
     }
     
     @Sendable
-    func create(req: Request) async throws -> TokenDTO {
+    private func create(req: Request) async throws -> TokenDTO {
         try UserDTO.validate(content: req)
         
         let user = try req.content.decode(UserDTO.self).toModel()
@@ -24,7 +24,7 @@ struct UserController: RouteCollection {
     }
     
     @Sendable
-    func login(req: Request) async throws -> TokenDTO {
+    private func handleLogin(req: Request) async throws -> TokenDTO {
         let user = try req.auth.require(User.self)
         
         guard let existedToken = try await Token.query(on: req.db)
