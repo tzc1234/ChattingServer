@@ -2,8 +2,8 @@ import Fluent
 import Vapor
 
 struct TodoDTO: Content {
-    var id: UUID?
-    var title: String?
+    let id: UUID?
+    let title: String?
     
     func toModel() -> Todo {
         let model = Todo()
