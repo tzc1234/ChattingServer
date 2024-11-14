@@ -2,7 +2,7 @@ import Foundation
 import Fluent
 
 final class User: Model, @unchecked Sendable {
-    static let schema = "user"
+    static let schema = "users"
     
     @ID(key: .id)
     var id: UUID?
@@ -26,5 +26,14 @@ final class User: Model, @unchecked Sendable {
         self.name = name
         self.email = email
         self.password = password
+    }
+    
+    func toDTO() -> UserDTO {
+        UserDTO(
+            id: id,
+            name: name,
+            email: email,
+            password: password
+        )
     }
 }

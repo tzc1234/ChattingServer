@@ -16,3 +16,11 @@ struct UserDTO: Content {
         return model
     }
 }
+
+extension UserDTO: Validatable {
+    static func validations(_ validations: inout Validations) {
+        validations.add("name", as: String.self, is: .count(3...))
+        validations.add("password", as: String.self, is: .count(3...))
+        validations.add("email", as: String.self, is: .email)
+    }
+}
