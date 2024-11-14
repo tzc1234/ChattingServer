@@ -15,6 +15,24 @@ struct UserDTO: Content {
         model.password = password
         return model
     }
+    
+    final class Public: Content {
+        let id: UUID?
+        let name: String
+        let email: String
+        
+        init(id: UUID?, name: String, email: String) {
+            self.id = id
+            self.name = name
+            self.email = email
+        }
+    }
+}
+
+extension UserDTO {
+    func toPublic() -> UserDTO.Public {
+        UserDTO.Public(id: id, name: name, email: email)
+    }
 }
 
 extension UserDTO: Validatable {

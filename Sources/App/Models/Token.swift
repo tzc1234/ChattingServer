@@ -7,8 +7,8 @@ final class Token: Model, @unchecked Sendable {
     @ID(key: .id)
     var id: UUID?
     
-    @Field(key: "value")
-    var value: String
+    @Field(key: "token_value")
+    var tokenValue: String
     
     @Parent(key: "user_id")
     var user: User
@@ -18,13 +18,24 @@ final class Token: Model, @unchecked Sendable {
     
     init() {}
     
-    init(id: UUID? = nil, value: String, userID: User.IDValue) {
+    init(id: UUID? = nil, tokenValue: String, userID: User.IDValue) {
         self.id = id
-        self.value = value
+        self.tokenValue = tokenValue
         self.$user.id = userID
     }
-    
-    func toDTO() -> TokenDTO {
-        TokenDTO(value: value, user: user)
+}
+
+extension Token {
+    static func generate(for user: User) throws -> Token {
+        let random = [UInt8].random(count: 32).base64
+        let token = try Token(tokenValue: random, userID: user.requireID())
+        return token
+    }
+}
+
+extension Token {
+    func toDTO(db: Database) async throws -> TokenDTO {
+        try await $user.load(on: db)
+        return TokenDTO(value: tokenValue, user: user.toDTO().toPublic())
     }
 }

@@ -28,7 +28,9 @@ final class User: Model, @unchecked Sendable {
         self.email = email
         self.password = password
     }
-    
+}
+
+extension User {
     func toDTO() -> UserDTO {
         UserDTO(
             id: id,
