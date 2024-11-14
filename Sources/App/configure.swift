@@ -11,6 +11,8 @@ public func configure(_ app: Application) async throws {
 
     app.migrations.add(CreateTodo())
     app.migrations.add(CreateUserTable())
+    app.migrations.add(CreateTokenTable())
+    try await app.autoMigrate()
     
     try routes(app)
 }
