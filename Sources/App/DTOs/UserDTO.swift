@@ -7,15 +7,6 @@ struct UserDTO: Content {
     let email: String
     let password: String
     
-    func toModel() -> User {
-        let model = User()
-        model.id = id
-        model.name = name
-        model.email = email
-        model.password = password
-        return model
-    }
-    
     final class Public: Content {
         let id: UUID?
         let name: String
@@ -30,6 +21,15 @@ struct UserDTO: Content {
 }
 
 extension UserDTO {
+    func toModel() -> User {
+        let model = User()
+        model.id = id
+        model.name = name
+        model.email = email
+        model.password = password
+        return model
+    }
+    
     func toPublic() -> UserDTO.Public {
         UserDTO.Public(id: id, name: name, email: email)
     }
