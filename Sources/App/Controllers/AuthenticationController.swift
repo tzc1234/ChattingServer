@@ -31,7 +31,6 @@ struct AuthenticationController: RouteCollection {
     @Sendable
     private func getCurrentUser(req: Request) async throws -> UserResponse {
         let payload = try req.auth.require(Payload.self)
-        
         guard let user = try await User.find(payload.userID, on: req.db) else {
             throw Abort(.notFound, reason: "User was not found", identifier: "user_not_found")
         }

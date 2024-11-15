@@ -2,22 +2,34 @@ import Vapor
 import JWT
 
 struct Payload: JWTPayload {
-    let userID: UUID
-    let name: String
+    // JWT required
+    let subject: SubjectClaim
+    let expiration: ExpirationClaim
+    
+    // Custom data
     let email: String
     
-    let exp: ExpirationClaim
+    enum CodingKeys: String, CodingKey {
+        case subject = "sub"
+        case expiration = "exp"
+        case email = "email"
+    }
     
     init(for user: User) throws {
-        self.userID = try user.requireID()
-        self.name = user.name
+        self.subject = SubjectClaim(value: try user.requireID().uuidString)
+        self.expiration = ExpirationClaim(value: .now.addingTimeInterval(.accessTokenLifetime))
         self.email = user.email
-        self.exp = ExpirationClaim(value: .now.addingTimeInterval(.accessTokenLifetime))
     }
     
     func verify(using algorithm: some JWTAlgorithm) async throws {
-        try exp.verifyNotExpired()
+        try expiration.verifyNotExpired()
     }
 }
 
 extension Payload: Authenticatable {}
+
+extension Payload {
+    var userID: UUID? {
+        UUID(uuidString: subject.value)
+    }
+}
