@@ -10,6 +10,10 @@ struct AuthenticationController: RouteCollection {
             .grouped(UserAuthenticator())
             .grouped(User.guardMiddleware())
         loginRoute.post(use: login)
+        
+        let meRoute = routes.grouped("me")
+            .grouped(JWTUserAuthenticator())
+        meRoute.get(use: getCurrentUser)
     }
     
     @Sendable
@@ -22,6 +26,17 @@ struct AuthenticationController: RouteCollection {
         
         let (accessToken, refreshToken) = try await newTokens(for: user, req: req)
         return RegisterResponse(user: user.toResponse(), accessToken: accessToken, refreshToken: refreshToken)
+    }
+    
+    @Sendable
+    private func getCurrentUser(req: Request) async throws -> UserResponse {
+        let payload = try req.auth.require(Payload.self)
+        
+        guard let user = try await User.find(payload.userID, on: req.db) else {
+            throw Abort(.notFound, reason: "User was not found", identifier: "user_not_found")
+        }
+        
+        return UserResponse(id: try user.requireID(), name: user.name, email: user.email)
     }
     
     @Sendable
