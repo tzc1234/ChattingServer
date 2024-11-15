@@ -1,7 +1,7 @@
 import Fluent
 import Vapor
 
-struct UserController: RouteCollection {
+struct AuthenticationController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {
         let register = routes.grouped("register")
         register.post(use: create)

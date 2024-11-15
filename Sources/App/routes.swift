@@ -8,6 +8,6 @@ func routes(_ app: Application) throws {
     
     try app.group("api", "v1") { api in
         try api.register(collection: TodoController())
-        try api.register(collection: UserController())
+        try api.register(collection: AuthenticationController())
     }
 }
