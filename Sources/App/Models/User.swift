@@ -31,12 +31,11 @@ final class User: Model, @unchecked Sendable {
 }
 
 extension User {
-    func toDTO() -> UserDTO {
-        UserDTO(
+    func toResponse() -> UserResponse {
+        UserResponse(
             id: id,
             name: name,
-            email: email,
-            password: password
+            email: email
         )
     }
 }

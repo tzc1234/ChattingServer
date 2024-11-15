@@ -1,26 +1,14 @@
 import Fluent
 import Vapor
 
-struct UserDTO: Content {
+struct RegisterRequest: Content {
     let id: UUID?
     let name: String
     let email: String
     let password: String
-    
-    final class Public: Content {
-        let id: UUID?
-        let name: String
-        let email: String
-        
-        init(id: UUID?, name: String, email: String) {
-            self.id = id
-            self.name = name
-            self.email = email
-        }
-    }
 }
 
-extension UserDTO {
+extension RegisterRequest {
     func toModel() -> User {
         let model = User()
         model.id = id
@@ -29,13 +17,9 @@ extension UserDTO {
         model.password = password
         return model
     }
-    
-    func toPublic() -> UserDTO.Public {
-        UserDTO.Public(id: id, name: name, email: email)
-    }
 }
 
-extension UserDTO: Validatable {
+extension RegisterRequest: Validatable {
     static func validations(_ validations: inout Validations) {
         validations.add("name", as: String.self, is: .count(3...))
         validations.add("password", as: String.self, is: .count(3...))

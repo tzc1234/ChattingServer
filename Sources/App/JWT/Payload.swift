@@ -8,7 +8,7 @@ struct Payload: JWTPayload {
     
     let exp: ExpirationClaim
     
-    init(with user: User) throws {
+    init(for user: User) throws {
         self.userID = try user.requireID()
         self.name = user.name
         self.email = user.email
@@ -16,7 +16,7 @@ struct Payload: JWTPayload {
     }
     
     func verify(using algorithm: some JWTAlgorithm) async throws {
-        try self.exp.verifyNotExpired()
+        try exp.verifyNotExpired()
     }
 }
 

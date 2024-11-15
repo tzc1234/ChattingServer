@@ -45,6 +45,6 @@ extension RefreshToken {
 extension RefreshToken {
     func toDTO(db: Database) async throws -> RefreshTokenDTO {
         try await $user.load(on: db)
-        return RefreshTokenDTO(token: token, user: user.toDTO().toPublic())
+        return RefreshTokenDTO(token: token, user: user.toResponse())
     }
 }
