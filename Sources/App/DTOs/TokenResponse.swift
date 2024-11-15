@@ -1,6 +1,6 @@
 import Vapor
 
-struct UserWithTokenResponse: Content {
+struct TokenResponse: Content {
     let user: UserResponse
     let accessToken: String
     let refreshToken: String

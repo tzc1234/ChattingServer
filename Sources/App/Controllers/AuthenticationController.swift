@@ -17,15 +17,14 @@ struct AuthenticationController: RouteCollection {
     }
     
     @Sendable
-    private func register(req: Request) async throws -> UserWithTokenResponse {
+    private func register(req: Request) async throws -> TokenResponse {
         try RegisterRequest.validate(content: req)
         
         let user = try req.content.decode(RegisterRequest.self).toModel()
         user.password = try Bcrypt.hash(user.password)
         try await user.save(on: req.db)
         
-        let (accessToken, refreshToken) = try await newTokens(for: user, req: req)
-        return UserWithTokenResponse(user: user.toResponse(), accessToken: accessToken, refreshToken: refreshToken)
+        return try await newTokenResponse(for: user, req: req)
     }
     
     @Sendable
@@ -39,26 +38,19 @@ struct AuthenticationController: RouteCollection {
     }
     
     @Sendable
-    private func login(req: Request) async throws -> RefreshTokenDTO {
+    private func login(req: Request) async throws -> TokenResponse {
         let user = try req.auth.require(User.self)
         
-        guard let existedToken = try await RefreshToken.query(on: req.db)
+        if let oldRefreshToken = try await RefreshToken.query(on: req.db)
             .filter(\.$user.$id == user.requireID())
-            .first()
-        else {
-            return try await newToken(for: user, db: req.db)
+            .first() {
+            try await oldRefreshToken.delete(on: req.db)
         }
         
-        return try await existedToken.toDTO(db: req.db)
+        return try await newTokenResponse(for: user, req: req)
     }
     
-    private func newToken(for user: User, db: Database) async throws -> RefreshTokenDTO {
-        let newToken = try RefreshToken.generate(for: user)
-        try await newToken.save(on: db)
-        return try await newToken.toDTO(db: db)
-    }
-    
-    private func newTokens(for user: User, req: Request) async throws -> (accessToken: String, refreshToken: String) {
+    private func newTokenResponse(for user: User, req: Request) async throws -> TokenResponse {
         let accessToken = try await req.jwt.sign(Payload(for: user))
         
         let token = RandomGenerator.generate(bytes: 32)
@@ -66,6 +58,6 @@ struct AuthenticationController: RouteCollection {
         let refreshToken = RefreshToken(token: hashedToken, userID: try user.requireID())
         try await refreshToken.save(on: req.db)
         
-        return (accessToken, token)
+        return TokenResponse(user: user.toResponse(), accessToken: accessToken, refreshToken: token)
     }
 }

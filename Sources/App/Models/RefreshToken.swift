@@ -33,18 +33,3 @@ final class RefreshToken: Model, @unchecked Sendable {
         self.expiresAt = expiresAt
     }
 }
-
-extension RefreshToken {
-    static func generate(for user: User) throws -> RefreshToken {
-        let random = [UInt8].random(count: 32).base64
-        let token = try RefreshToken(token: random, userID: user.requireID())
-        return token
-    }
-}
-
-extension RefreshToken {
-    func toDTO(db: Database) async throws -> RefreshTokenDTO {
-        try await $user.load(on: db)
-        return RefreshTokenDTO(token: token, user: user.toResponse())
-    }
-}

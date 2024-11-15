@@ -1,7 +1,7 @@
 import Foundation
 
 enum Constants {
-    static let ACCESS_TOKEN_LIFETIME: Double = 60 * 15 // 15 minutes
+    static let ACCESS_TOKEN_LIFETIME: Double = 60 * 60 // 1 hour
     static let REFRESH_TOKEN_LIFETIME: Double = 60 * 60 * 24 * 7 // 7 days
 }
 
