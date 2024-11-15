@@ -7,8 +7,6 @@ struct AuthenticationController: RouteCollection {
         registerRoute.post(use: register)
         
         let loginRoute = routes.grouped("login")
-            .grouped(UserAuthenticator())
-            .grouped(User.guardMiddleware())
         loginRoute.post(use: login)
         
         let meRoute = routes.grouped("me")
@@ -39,7 +37,14 @@ struct AuthenticationController: RouteCollection {
     
     @Sendable
     private func login(req: Request) async throws -> TokenResponse {
-        let user = try req.auth.require(User.self)
+        let loginRequest = try req.content.decode(LoginRequest.self)
+        
+        guard let user = try await User.query(on: req.db)
+            .filter(\.$email == loginRequest.email)
+            .first(), try Bcrypt.verify(loginRequest.password, created: user.password)
+        else {
+            throw Abort(.notFound, reason: "User was not found", identifier: "user_not_found")
+        }
         
         if let oldRefreshToken = try await RefreshToken.query(on: req.db)
             .filter(\.$user.$id == user.requireID())
