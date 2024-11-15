@@ -1,6 +1,6 @@
 import Fluent
 
-struct CreateUserTable: AsyncMigration {
+struct CreateUser: AsyncMigration {
     func prepare(on database: Database) async throws {
         try await database.schema("users")
             .id()

@@ -1,12 +1,14 @@
 import Fluent
 
-struct CreateTokenTable: AsyncMigration {
+struct CreateRefreshToken: AsyncMigration {
     func prepare(on database: Database) async throws {
-        try await database.schema("tokens")
+        try await database.schema("refresh_tokens")
             .id()
-            .field("token_value", .string, .required)
+            .field("token", .string, .required)
             .field("user_id", .uuid, .required, .references("users", "id", onDelete: .cascade))
-            .field("created_at", .date)
+            .field("issued_at", .date)
+            .field("expires_at", .date)
+            .unique(on: "token")
             .unique(on: "user_id")
             .create()
     }

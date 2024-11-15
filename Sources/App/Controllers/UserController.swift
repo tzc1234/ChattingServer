@@ -13,7 +13,7 @@ struct UserController: RouteCollection {
     }
     
     @Sendable
-    private func create(req: Request) async throws -> TokenDTO {
+    private func create(req: Request) async throws -> RefreshTokenDTO {
         try UserDTO.validate(content: req)
         
         let user = try req.content.decode(UserDTO.self).toModel()
@@ -24,10 +24,10 @@ struct UserController: RouteCollection {
     }
     
     @Sendable
-    private func handleLogin(req: Request) async throws -> TokenDTO {
+    private func handleLogin(req: Request) async throws -> RefreshTokenDTO {
         let user = try req.auth.require(User.self)
         
-        guard let existedToken = try await Token.query(on: req.db)
+        guard let existedToken = try await RefreshToken.query(on: req.db)
             .filter(\.$user.$id == user.requireID())
             .first()
         else {
@@ -37,8 +37,8 @@ struct UserController: RouteCollection {
         return try await existedToken.toDTO(db: req.db)
     }
     
-    private func newToken(for user: User, db: Database) async throws -> TokenDTO {
-        let newToken = try Token.generate(for: user)
+    private func newToken(for user: User, db: Database) async throws -> RefreshTokenDTO {
+        let newToken = try RefreshToken.generate(for: user)
         try await newToken.save(on: db)
         return try await newToken.toDTO(db: db)
     }
