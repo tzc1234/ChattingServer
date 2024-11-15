@@ -17,7 +17,7 @@ struct AuthenticationController: RouteCollection {
     }
     
     @Sendable
-    private func register(req: Request) async throws -> RegisterResponse {
+    private func register(req: Request) async throws -> UserWithTokenResponse {
         try RegisterRequest.validate(content: req)
         
         let user = try req.content.decode(RegisterRequest.self).toModel()
@@ -25,7 +25,7 @@ struct AuthenticationController: RouteCollection {
         try await user.save(on: req.db)
         
         let (accessToken, refreshToken) = try await newTokens(for: user, req: req)
-        return RegisterResponse(user: user.toResponse(), accessToken: accessToken, refreshToken: refreshToken)
+        return UserWithTokenResponse(user: user.toResponse(), accessToken: accessToken, refreshToken: refreshToken)
     }
     
     @Sendable
