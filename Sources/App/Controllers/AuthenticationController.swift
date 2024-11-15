@@ -19,7 +19,7 @@ struct AuthenticationController: RouteCollection {
         try RegisterRequest.validate(content: req)
         
         let user = try req.content.decode(RegisterRequest.self).toModel()
-        user.password = try Bcrypt.hash(user.password)
+        user.password = try await req.password.async.hash(user.password)
         try await user.save(on: req.db)
         
         return try await newTokenResponse(for: user, req: req)
@@ -41,7 +41,7 @@ struct AuthenticationController: RouteCollection {
         
         guard let user = try await User.query(on: req.db)
             .filter(\.$email == loginRequest.email)
-            .first(), try Bcrypt.verify(loginRequest.password, created: user.password)
+            .first(), try await req.password.async.verify(loginRequest.password, created: user.password)
         else {
             throw Abort(.notFound, reason: "User was not found", identifier: "user_not_found")
         }

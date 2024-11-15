@@ -9,6 +9,7 @@ public func configure(_ app: Application) async throws {
     // app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
 
     app.databases.use(DatabaseConfigurationFactory.sqlite(.file("db.sqlite")), as: .sqlite)
+    app.passwords.use(.bcrypt)
 
     let secret = Environment.get("JWT_SECRET_KEY")!
     await app.jwt.keys.add(hmac: HMACKey(from: secret), digestAlgorithm: .sha256)
