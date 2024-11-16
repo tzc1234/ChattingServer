@@ -66,7 +66,7 @@ struct AuthenticationController: RouteCollection {
     @Sendable
     private func refreshToken(req: Request) async throws -> RefreshTokenResponse {
         let refreshRequest = try req.content.decode(RefreshTokenRequest.self)
-        let hashedRefreshToken = SHA256.hash(data: Data(refreshRequest.refreshToken.utf8)).hex
+        let hashedRefreshToken = SHA256.hash(refreshRequest.refreshToken)
         
         guard let refreshToken = try await RefreshToken.query(on: req.db)
             .filter(\.$token == hashedRefreshToken)
@@ -91,7 +91,7 @@ struct AuthenticationController: RouteCollection {
         let accessToken = try await req.jwt.sign(Payload(for: user))
         
         let token = RandomGenerator.generate(bytes: 32)
-        let hashedToken = SHA256.hash(data: Data(token.utf8)).hex
+        let hashedToken = SHA256.hash(token)
         let refreshToken = RefreshToken(token: hashedToken, userID: try user.requireID())
         try await refreshToken.save(on: req.db)
         
