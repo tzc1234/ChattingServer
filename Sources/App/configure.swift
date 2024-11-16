@@ -14,7 +14,6 @@ public func configure(_ app: Application) async throws {
     let secret = Environment.get("JWT_SECRET_KEY")!
     await app.jwt.keys.add(hmac: HMACKey(from: secret), digestAlgorithm: .sha256)
     
-    app.migrations.add(CreateTodo())
     app.migrations.add(CreateUser())
     app.migrations.add(CreateRefreshToken())
     try await app.autoMigrate()
