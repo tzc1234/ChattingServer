@@ -3,15 +3,18 @@ import Vapor
 
 struct AuthenticationController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {
-        let registerRoute = routes.grouped("register")
-        registerRoute.post(use: register)
+        routes.group("register") { registerRoute in
+            registerRoute.post(use: register)
+        }
         
-        let loginRoute = routes.grouped("login")
-        loginRoute.post(use: login)
+        routes.group("login") { loginRoute in
+            loginRoute.post(use: login)
+        }
         
-        let meRoute = routes.grouped("me")
-            .grouped(JWTUserAuthenticator())
-        meRoute.get(use: getCurrentUser)
+        routes.grouped("me")
+            .group(JWTUserAuthenticator()) { route in
+                route.get(use: getCurrentUser)
+            }
     }
     
     @Sendable
