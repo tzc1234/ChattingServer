@@ -12,6 +12,7 @@ struct AuthenticationController: RouteCollection {
         }
         
         routes.grouped("me")
+            .grouped(AccessTokenGuardMiddleware())
             .group(UserAuthenticator()) { route in
                 route.get(use: getCurrentUser)
             }
