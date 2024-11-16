@@ -11,15 +11,15 @@ struct AuthenticationController: RouteCollection {
             loginRoute.post(use: login)
         }
         
+        routes.group("refreshToken") { route in
+            route.post(use: refreshToken)
+        }
+        
         routes.grouped("me")
             .grouped(AccessTokenGuardMiddleware())
             .group(UserAuthenticator()) { route in
                 route.get(use: getCurrentUser)
             }
-        
-        routes.group("refreshToken") { route in
-            route.post(use: refreshToken)
-        }
     }
     
     @Sendable
@@ -31,16 +31,6 @@ struct AuthenticationController: RouteCollection {
         try await user.save(on: req.db)
         
         return try await newTokenResponse(for: user, req: req)
-    }
-    
-    @Sendable
-    private func getCurrentUser(req: Request) async throws -> UserResponse {
-        let payload = try req.auth.require(Payload.self)
-        guard let user = try await User.find(payload.userID, on: req.db) else {
-            throw AuthenticationError.userNotFound
-        }
-        
-        return UserResponse(id: try user.requireID(), name: user.name, email: user.email)
     }
     
     @Sendable
@@ -96,5 +86,15 @@ struct AuthenticationController: RouteCollection {
         try await refreshToken.save(on: req.db)
         
         return (accessToken, token)
+    }
+    
+    @Sendable
+    private func getCurrentUser(req: Request) async throws -> UserResponse {
+        let payload = try req.auth.require(Payload.self)
+        guard let user = try await User.find(payload.userID, on: req.db) else {
+            throw AuthenticationError.userNotFound
+        }
+        
+        return UserResponse(id: try user.requireID(), name: user.name, email: user.email)
     }
 }
