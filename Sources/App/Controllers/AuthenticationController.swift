@@ -37,7 +37,7 @@ struct AuthenticationController: RouteCollection {
     private func getCurrentUser(req: Request) async throws -> UserResponse {
         let payload = try req.auth.require(Payload.self)
         guard let user = try await User.find(payload.userID, on: req.db) else {
-            throw Abort(.notFound, reason: "User was not found", identifier: "user_not_found")
+            throw AuthenticationError.userNotFound
         }
         
         return UserResponse(id: try user.requireID(), name: user.name, email: user.email)
@@ -51,7 +51,7 @@ struct AuthenticationController: RouteCollection {
             .filter(\.$email == loginRequest.email)
             .first(), try await req.password.async.verify(loginRequest.password, created: user.password)
         else {
-            throw Abort(.notFound, reason: "User was not found", identifier: "user_not_found")
+            throw AuthenticationError.userNotFound
         }
         
         if let oldRefreshToken = try await RefreshToken.query(on: req.db)
@@ -70,13 +70,9 @@ struct AuthenticationController: RouteCollection {
         
         guard let refreshToken = try await RefreshToken.query(on: req.db)
             .filter(\.$token == hashedRefreshToken)
-            .first()
+            .first(), refreshToken.expiresAt > .now
         else {
-            throw Abort(.unauthorized, reason: "refresh token invalid", identifier: "refresh_token_invalid")
-        }
-        
-        guard refreshToken.expiresAt > .now else {
-            throw Abort(.unauthorized, reason: "refresh token expired", identifier: "refresh_token_expired")
+            throw AuthenticationError.refreshTokenInvalid
         }
         
         let user = try await refreshToken.$user.get(on: req.db)

@@ -5,7 +5,7 @@ struct AccessTokenGuardMiddleware: AsyncMiddleware {
         do {
             _ = try await request.jwt.verify(as: Payload.self)
         } catch {
-            throw Abort(.unauthorized, reason: "access token invalid", identifier: "access_token_invalid")
+            throw AuthenticationError.accessTokenInvalid
         }
         
         return try await next.respond(to: request)
