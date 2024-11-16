@@ -12,7 +12,7 @@ struct AuthenticationController: RouteCollection {
         }
         
         routes.grouped("me")
-            .group(JWTUserAuthenticator()) { route in
+            .group(UserAuthenticator()) { route in
                 route.get(use: getCurrentUser)
             }
     }
