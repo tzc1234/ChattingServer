@@ -6,7 +6,18 @@ struct ContactController: RouteCollection {
         let protected = routes.grouped("contacts")
             .grouped(AccessTokenGuardMiddleware(), UserAuthenticator())
         
+        protected.get(use: index)
         protected.post(use: create)
+    }
+    
+    @Sendable
+    private func index(req: Request) async throws -> ContactsResponse {
+        let payload = try req.auth.require(Payload.self)
+        let currentUserID = payload.userID
+        let db = req.db
+        
+        return try await getAllContacts(for: currentUserID, on: db)
+            .toResponse(currentUserID: currentUserID, db: db)
     }
     
     @Sendable
@@ -39,12 +50,14 @@ struct ContactController: RouteCollection {
         }
         try await contact.save(on: db)
         
-        let contacts = try await Contact.query(on: db)
+        return try await getAllContacts(for: currentUserID, on: db).toResponse(currentUserID: currentUserID, db: db)
+    }
+    
+    private func getAllContacts(for currentUserID: Int, on db: Database) async throws -> [Contact] {
+        return try await Contact.query(on: db)
             .group(.or) { $0.filter(\.$user1.$id == currentUserID).filter(\.$user2.$id == currentUserID) }
             .with(\.$blockedBy)
             .all()
-        
-        return try await contacts.toResponse(currentUserID: currentUserID, db: db)
     }
 }
 
@@ -58,9 +71,11 @@ private extension [Contact] {
                 try await contact.$user2.get(on: db)
             }
             
-            contactResponses.append(ContactResponse(
-                responder: responder.toResponse(),
-                blockedByUserEmail: contact.blockedBy?.email)
+            contactResponses.append(
+                ContactResponse(
+                    responder: responder.toResponse(),
+                    blockedByUserEmail: contact.blockedBy?.email
+                )
             )
         }
         return ContactsResponse(contacts: contactResponses)
