@@ -36,7 +36,7 @@ struct ContactController: RouteCollection {
             .filter(\.$email == responderEmail)
             .first(), let responderID = try? responder.requireID()
         else {
-            throw Abort(.conflict, reason: "Responder not found", identifier: "responder_not_found")
+            throw Abort(.notFound, reason: "Responder not found", identifier: "responder_not_found")
         }
         
         guard currentUserID != responderID else {
