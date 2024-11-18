@@ -14,6 +14,6 @@ struct CreateRefreshToken: AsyncMigration {
     }
     
     func revert(on database: Database) async throws {
-        try await database.schema("tokens").delete()
+        try await database.schema("refresh_tokens").delete()
     }
 }
