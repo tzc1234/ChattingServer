@@ -16,6 +16,7 @@ public func configure(_ app: Application) async throws {
     
     app.migrations.add(CreateUser())
     app.migrations.add(CreateRefreshToken())
+    app.migrations.add(CreateContact())
     try await app.autoMigrate()
     
     try routes(app)
