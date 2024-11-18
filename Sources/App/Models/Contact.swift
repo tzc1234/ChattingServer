@@ -19,6 +19,9 @@ final class Contact: Model, @unchecked Sendable {
     @Timestamp(key: "created_at", on: .create)
     var createdAt: Date?
     
+    @Children(for: \.$contact)
+    var messages: [Message]
+    
     init() {}
     
     init(id: Int? = nil, userID1: User.IDValue, userID2: User.IDValue, blockedByUserID: User.IDValue? = nil) {
