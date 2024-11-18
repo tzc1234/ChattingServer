@@ -3,7 +3,7 @@ import Fluent
 struct CreateRefreshToken: AsyncMigration {
     func prepare(on database: Database) async throws {
         try await database.schema("refresh_tokens")
-            .id()
+            .field("id", .int, .identifier(auto: true))
             .field("token", .string, .required)
             .field("user_id", .uuid, .required, .references("users", "id", onDelete: .cascade))
             .field("issued_at", .datetime, .required)

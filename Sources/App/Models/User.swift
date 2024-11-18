@@ -4,8 +4,8 @@ import Fluent
 final class User: Model, @unchecked Sendable {
     static let schema = "users"
     
-    @ID(key: .id)
-    var id: UUID?
+    @ID(custom: "id", generatedBy: .database)
+    var id: Int?
     
     @Field(key: "name")
     var name: String
@@ -24,7 +24,7 @@ final class User: Model, @unchecked Sendable {
     
     init() {}
     
-    init(id: UUID? = nil, name: String, email: String, password: String) {
+    init(id: Int? = nil, name: String, email: String, password: String) {
         self.id = id
         self.name = name
         self.email = email

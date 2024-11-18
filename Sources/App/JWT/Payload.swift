@@ -16,7 +16,7 @@ struct Payload: JWTPayload {
     }
     
     init(for user: User) throws {
-        self.subject = SubjectClaim(value: try user.requireID().uuidString)
+        self.subject = SubjectClaim(value: try String(user.requireID()))
         self.expiration = ExpirationClaim(value: .now.addingTimeInterval(.accessTokenLifetime))
         self.email = user.email
     }
@@ -29,7 +29,7 @@ struct Payload: JWTPayload {
 extension Payload: Authenticatable {}
 
 extension Payload {
-    var userID: UUID? {
-        UUID(uuidString: subject.value)
+    var userID: Int? {
+        Int(subject.value)
     }
 }

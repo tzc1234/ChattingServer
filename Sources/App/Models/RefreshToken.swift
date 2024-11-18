@@ -4,8 +4,8 @@ import Fluent
 final class RefreshToken: Model, @unchecked Sendable {
     static let schema = "refresh_tokens"
     
-    @ID(key: .id)
-    var id: UUID?
+    @ID(custom: "id", generatedBy: .database)
+    var id: Int?
     
     @Field(key: "token")
     var token: String
@@ -21,7 +21,7 @@ final class RefreshToken: Model, @unchecked Sendable {
     
     init() {}
     
-    init(id: UUID? = nil,
+    init(id: Int? = nil,
          token: String,
          userID: User.IDValue,
          issuedAt: Date = .now,

@@ -2,7 +2,7 @@ import Fluent
 import Vapor
 
 struct RegisterRequest: Content {
-    let id: UUID?
+    let id: Int?
     let name: String
     let email: String
     let password: String
