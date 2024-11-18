@@ -7,17 +7,21 @@ struct Payload: JWTPayload {
     let expiration: ExpirationClaim
     
     // Custom data
+    let userID: Int
     let email: String
     
     enum CodingKeys: String, CodingKey {
         case subject = "sub"
         case expiration = "exp"
+        case userID = "user_id"
         case email = "email"
     }
     
     init(for user: User) throws {
-        self.subject = SubjectClaim(value: try String(user.requireID()))
+        let id = try user.requireID()
+        self.subject = SubjectClaim(value: String(id))
         self.expiration = ExpirationClaim(value: .now.addingTimeInterval(.accessTokenLifetime))
+        self.userID = id
         self.email = user.email
     }
     
@@ -27,9 +31,3 @@ struct Payload: JWTPayload {
 }
 
 extension Payload: Authenticatable {}
-
-extension Payload {
-    var userID: Int? {
-        Int(subject.value)
-    }
-}
