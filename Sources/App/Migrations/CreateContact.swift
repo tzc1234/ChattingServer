@@ -2,7 +2,7 @@ import Fluent
 
 struct CreateContact: AsyncMigration {
     func prepare(on database: Database) async throws {
-        try await database.schema("contacts")
+        try await database.schema(schema)
             .field("id", .int, .identifier(auto: true))
             .field("user_id1", .int, .required, .references("users", "id", onDelete: .cascade))
             .field("user_id2", .int, .required, .references("users", "id", onDelete: .cascade))
@@ -15,6 +15,8 @@ struct CreateContact: AsyncMigration {
     }
     
     func revert(on database: any FluentKit.Database) async throws {
-        try await database.schema("contacts").delete()
+        try await database.schema(schema).delete()
     }
+    
+    private var schema: String { Contact.schema }
 }
