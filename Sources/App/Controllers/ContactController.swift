@@ -21,14 +21,12 @@ struct ContactController: RouteCollection {
     private func create(req: Request) async throws -> ContactsResponse {
         let payload = try req.auth.require(Payload.self)
         let contactRequest = try req.content.decode(ContactRequest.self)
-        return try await makeContactsResponse(
-            currentUserID: payload.userID,
-            responderEmail: contactRequest.responderEmail,
-            db: req.db
-        )
+        let currentUserID = payload.userID
+        try await newContact(for: currentUserID, with: contactRequest.responderEmail, on: req.db)
+        return try await getContactsResponse(for: currentUserID, on: req.db)
     }
     
-    private func makeContactsResponse(currentUserID: Int, responderEmail: String, db: Database) async throws -> ContactsResponse {
+    private func newContact(for currentUserID: Int, with responderEmail: String, on db: Database) async throws {
         guard let responder = try await User.query(on: db)
             .filter(\.$email == responderEmail)
             .first(), let responderID = try? responder.requireID()
@@ -46,8 +44,6 @@ struct ContactController: RouteCollection {
             Contact(userID1: responderID, userID2: currentUserID)
         }
         try await contact.save(on: db)
-        
-        return try await getContactsResponse(for: currentUserID, on: db)
     }
     
     private func getContactsResponse(for currentUserID: Int, on db: Database) async throws -> ContactsResponse {
