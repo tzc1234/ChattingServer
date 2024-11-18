@@ -14,10 +14,7 @@ struct ContactController: RouteCollection {
     private func index(req: Request) async throws -> ContactsResponse {
         let payload = try req.auth.require(Payload.self)
         let currentUserID = payload.userID
-        let db = req.db
-        
-        return try await getAllContacts(for: currentUserID, on: db)
-            .toResponse(currentUserID: currentUserID, db: db)
+        return try await getContactsResponse(for: currentUserID, on: req.db)
     }
     
     @Sendable
@@ -50,14 +47,15 @@ struct ContactController: RouteCollection {
         }
         try await contact.save(on: db)
         
-        return try await getAllContacts(for: currentUserID, on: db).toResponse(currentUserID: currentUserID, db: db)
+        return try await getContactsResponse(for: currentUserID, on: db)
     }
     
-    private func getAllContacts(for currentUserID: Int, on db: Database) async throws -> [Contact] {
+    private func getContactsResponse(for currentUserID: Int, on db: Database) async throws -> ContactsResponse {
         return try await Contact.query(on: db)
             .group(.or) { $0.filter(\.$user1.$id == currentUserID).filter(\.$user2.$id == currentUserID) }
             .with(\.$blockedBy)
             .all()
+            .toResponse(currentUserID: currentUserID, db: db)
     }
 }
 
