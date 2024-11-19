@@ -7,6 +7,7 @@ struct CreateMessage: AsyncMigration {
             .field("contact_id", .int, .required, .references("contacts", "id", onDelete: .cascade))
             .field("sender_id", .int, .required, .references("users", "id", onDelete: .cascade))
             .field("text", .string, .required)
+            .field("is_read", .bool, .required, .sql(.default(false)))
             .field("created_by", .datetime, .required)
             .create()
     }

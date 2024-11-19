@@ -16,14 +16,18 @@ final class Message: Model, @unchecked Sendable {
     @Field(key: "text")
     var text: String
     
+    @Field(key: "is_read")
+    var isRead: Bool
+    
     @Timestamp(key: "created_by", on: .create)
     var createdBy: Date?
     
     init() {}
     
-    init(id: Int? = nil, senderID: User.IDValue, text: String) {
+    init(id: Int? = nil, senderID: User.IDValue, text: String, isRead: Bool = false) {
         self.id = id
         self.$sender.id = senderID
         self.text = text
+        self.isRead = isRead
     }
 }
