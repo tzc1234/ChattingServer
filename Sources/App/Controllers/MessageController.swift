@@ -35,7 +35,7 @@ struct MessageController: RouteCollection {
 extension Message {
     func toResponse(db: Database) async throws -> MessageResponse {
         let sender = try await $sender.get(on: db)
-        return MessageResponse(text: text, sender: sender.toResponse(), isRead: isRead)
+        return MessageResponse(text: text, senderID: try sender.requireID(), isRead: isRead)
     }
 }
 
