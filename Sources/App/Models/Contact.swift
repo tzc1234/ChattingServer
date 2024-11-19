@@ -31,3 +31,13 @@ final class Contact: Model, @unchecked Sendable {
         self.$blockedBy.id = blockedByUserID
     }
 }
+
+extension Contact {
+    func unreadMessagesCount(db: Database) async throws -> Int {
+        try await unreadMessageQuery(db: db).count()
+    }
+    
+    private func unreadMessageQuery(db: Database) -> QueryBuilder<Message> {
+        $messages.query(on: db).filter(\.$isRead == false)
+    }
+}
