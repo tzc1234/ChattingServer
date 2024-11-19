@@ -67,6 +67,7 @@ private extension [Contact] {
             
             contactResponses.append(
                 ContactResponse(
+                    id: try contact.requireID(),
                     responder: responder.toResponse(),
                     blockedByUserEmail: contact.blockedBy?.email,
                     unreadMessageCount: try await contact.unreadMessagesCount(db: db)
