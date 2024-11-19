@@ -38,6 +38,10 @@ struct ContactController: RouteCollection {
             throw Abort(.conflict, reason: "Responder cannot be the same as current user", identifier: "responder_same_as_current_user")
         }
         
+        try await saveNewContact(with: currentUserID, and: responderID, on: db)
+    }
+    
+    private func saveNewContact(with currentUserID: Int, and responderID: Int, on db: Database) async throws {
         let contact = if currentUserID < responderID {
             Contact(userID1: currentUserID, userID2: responderID)
         } else {
@@ -59,11 +63,7 @@ private extension [Contact] {
     func toResponse(currentUserID: Int, db: Database) async throws -> ContactsResponse {
         var contactResponses = [ContactResponse]()
         for contact in self {
-            let responder = if contact.$user1.id != currentUserID {
-                try await contact.$user1.get(on: db)
-            } else {
-                try await contact.$user2.get(on: db)
-            }
+            let responder = try await loadResponder(from: contact, currentUserID: currentUserID, on: db)
             
             contactResponses.append(
                 ContactResponse(
@@ -74,5 +74,13 @@ private extension [Contact] {
             )
         }
         return ContactsResponse(contacts: contactResponses)
+    }
+    
+    private func loadResponder(from contact: Contact, currentUserID: Int, on db: Database) async throws -> User {
+        if contact.$user1.id != currentUserID {
+            try await contact.$user1.get(on: db)
+        } else {
+            try await contact.$user2.get(on: db)
+        }
     }
 }
