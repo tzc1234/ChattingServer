@@ -13,7 +13,7 @@ final class Contact: Model, @unchecked Sendable {
     @Parent(key: "user_id2")
     var user2: User
     
-    @OptionalParent(key: "blocked_by")
+    @OptionalParent(key: "blocked_by_user_id")
     var blockedBy: User?
     
     @Timestamp(key: "created_at", on: .create)
