@@ -8,14 +8,26 @@ struct MessageController: RouteCollection {
             .grouped(AccessTokenGuardMiddleware(), UserAuthenticator())
         
         protected.get(use: index)
+        protected.webSocket(shouldUpgrade: updateToMessagesChannel, onUpgrade: messagesChannel)
     }
     
     @Sendable
-    func index(req: Request) async throws -> MessagesResponse {
-        guard let contactIDString = req.parameters.get("contact_id"), let contactID = Int(contactIDString) else {
-            throw Abort(.badRequest, reason: "Contact id invalid", identifier: "contact_id_invalid")
-        }
+    private func updateToMessagesChannel(req: Request) async throws -> HTTPHeaders? {
+        let payload = try req.auth.require(Payload.self)
+        let contactID = try validateContactID(req: req)
+        try await checkContactExist(userID: payload.userID, contactID: contactID, db: req.db)
+        return HTTPHeaders([])
+    }
+    
+    @Sendable
+    private func messagesChannel(req: Request, ws: WebSocket) async {
         
+        
+    }
+    
+    @Sendable
+    private func index(req: Request) async throws -> MessagesResponse {
+        let contactID = try validateContactID(req: req)
         let indexRequest = try req.query.decode(MessagesIndexRequest.self)
         let payload = try req.auth.require(Payload.self)
         try await checkContactExist(userID: payload.userID, contactID: contactID, db: req.db)
@@ -49,6 +61,14 @@ struct MessageController: RouteCollection {
         }
         
         return messageSubquery.limit(request.limit ?? defaultLimit).query
+    }
+    
+    private func validateContactID(req: Request) throws -> Int {
+        guard let contactIDString = req.parameters.get("contact_id"), let contactID = Int(contactIDString) else {
+            throw Abort(.badRequest, reason: "Contact id invalid", identifier: "contact_id_invalid")
+        }
+        
+        return contactID
     }
     
     private func checkContactExist(userID: Int, contactID: Int, db: Database) async throws {
