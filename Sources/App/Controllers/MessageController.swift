@@ -29,16 +29,7 @@ struct MessageController: RouteCollection {
             .from(messageSubquery(contactID: contactID, request: indexRequest))
             .orderBy("id", .ascending)
             .all()
-        
-        let messageResponses = try raws.map { row in
-            let id = try row.decode(column: "id", as: Int.self)
-            let text = try row.decode(column: "text", as: String.self)
-            let senderID = try row.decode(column: "sender_id", as: Int.self)
-            let isRead = try row.decode(column: "is_read", as: Bool.self)
-            return MessageResponse(id: id, text: text, senderID: senderID, isRead: isRead)
-        }
-        
-        return MessagesResponse(messages: messageResponses)
+        return MessagesResponse(messages: try raws.map { try $0.decode(model: MessageResponse.self) })
     }
     
     private func messageSubquery(contactID: Int, request: MessagesIndexRequest) -> SQLSubquery {
