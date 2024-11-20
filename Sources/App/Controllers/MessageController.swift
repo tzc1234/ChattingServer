@@ -20,7 +20,7 @@ actor MessageController: RouteCollection {
             .grouped(AccessTokenGuardMiddleware(), UserAuthenticator())
         
         protected.get(use: index)
-        protected.webSocket("channel", shouldUpgrade: updateToMessagesChannel, onUpgrade: messagesChannel)
+        protected.webSocket("channel", shouldUpgrade: upgradeToMessagesChannel, onUpgrade: messagesChannel)
     }
     
     @Sendable
@@ -28,6 +28,7 @@ actor MessageController: RouteCollection {
         let contactID = try validateContactID(req: req)
         let indexRequest = try req.query.decode(MessagesIndexRequest.self)
         let payload = try req.auth.require(Payload.self)
+        
         try await checkContactExist(userID: payload.userID, contactID: contactID, db: req.db)
         
         guard let sql = req.db as? SQLDatabase else {
@@ -66,7 +67,7 @@ actor MessageController: RouteCollection {
     }
     
     @Sendable
-    private func updateToMessagesChannel(req: Request) async throws -> HTTPHeaders? {
+    private func upgradeToMessagesChannel(req: Request) async throws -> HTTPHeaders? {
         let payload = try req.auth.require(Payload.self)
         let contactID = try validateContactID(req: req)
         try await checkContactExist(userID: payload.userID, contactID: contactID, db: req.db)
