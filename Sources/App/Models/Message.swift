@@ -24,8 +24,9 @@ final class Message: Model, @unchecked Sendable {
     
     init() {}
     
-    init(id: Int? = nil, senderID: User.IDValue, text: String, isRead: Bool = false) {
+    init(id: Int? = nil, contactID: Contact.IDValue, senderID: User.IDValue, text: String, isRead: Bool = false) {
         self.id = id
+        self.$contact.id = contactID
         self.$sender.id = senderID
         self.text = text
         self.isRead = isRead

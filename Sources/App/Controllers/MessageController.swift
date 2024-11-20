@@ -2,27 +2,17 @@ import Fluent
 import Vapor
 import SQLKit
 
-struct MessageController: RouteCollection {
-    func boot(routes: RoutesBuilder) throws {
+actor MessageController: RouteCollection {
+    private var defaultLimit: Int { 20 }
+    private var contactID: Int?
+    private var senderID: Int?
+    
+    nonisolated func boot(routes: RoutesBuilder) throws {
         let protected = routes.grouped("contacts", ":contact_id", "messages")
             .grouped(AccessTokenGuardMiddleware(), UserAuthenticator())
         
         protected.get(use: index)
         protected.webSocket(shouldUpgrade: updateToMessagesChannel, onUpgrade: messagesChannel)
-    }
-    
-    @Sendable
-    private func updateToMessagesChannel(req: Request) async throws -> HTTPHeaders? {
-        let payload = try req.auth.require(Payload.self)
-        let contactID = try validateContactID(req: req)
-        try await checkContactExist(userID: payload.userID, contactID: contactID, db: req.db)
-        return HTTPHeaders([])
-    }
-    
-    @Sendable
-    private func messagesChannel(req: Request, ws: WebSocket) async {
-        
-        
     }
     
     @Sendable
@@ -42,6 +32,54 @@ struct MessageController: RouteCollection {
             .orderBy("id", .ascending)
             .all()
         return MessagesResponse(messages: try raws.map { try $0.decode(model: MessageResponse.self) })
+    }
+    
+    @Sendable
+    private func updateToMessagesChannel(req: Request) async throws -> HTTPHeaders? {
+        let payload = try req.auth.require(Payload.self)
+        let contactID = try validateContactID(req: req)
+        try await checkContactExist(userID: payload.userID, contactID: contactID, db: req.db)
+        
+        self.contactID = contactID
+        self.senderID = payload.userID
+        
+        return HTTPHeaders([])
+    }
+    
+    @Sendable
+    private func messagesChannel(req: Request, ws: WebSocket) async {
+        ws.onClose.whenComplete { _ in
+            // TODO: close all ws
+        }
+        
+        ws.onText { ws, text in
+            try? await ws.close(code: .unacceptableData)
+        }
+        
+        ws.onBinary { [senderID, contactID] ws, data in
+            let decoder = JSONDecoder()
+            let encoder = JSONEncoder()
+            
+            guard let incoming = try? decoder.decode(IncomingMessage.self, from: data),
+                  let senderID,
+                  let contactID else {
+                try? await ws.close(code: .unacceptableData)
+                return
+            }
+            
+            print("Incoming text: \(incoming.text)")
+            
+            let message = Message(contactID: contactID, senderID: senderID, text: incoming.text)
+            do {
+                try await message.save(on: req.db)
+                let ongoing = MessageResponse(id: try message.requireID(), text: incoming.text, senderID: senderID, isRead: false)
+                let encoded = try encoder.encode(ongoing)
+                
+                try await ws.send([UInt8](encoded))
+            } catch {
+                print("error: \(error.localizedDescription)")
+            }
+        }
     }
     
     private func messageSubquery(contactID: Int, request: MessagesIndexRequest) -> SQLSubquery {
@@ -81,8 +119,6 @@ struct MessageController: RouteCollection {
             throw Abort(.notFound, reason: "Contact not found", identifier: "contact_not_found")
         }
     }
-    
-    private var defaultLimit: Int { 20 }
 }
 
 extension Message {
