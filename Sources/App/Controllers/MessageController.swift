@@ -75,12 +75,12 @@ actor MessageController: RouteCollection {
         self.contactID = contactID
         self.senderID = payload.userID
         
-        return HTTPHeaders([])
+        return [:]
     }
     
     @Sendable
     private func messagesChannel(req: Request, ws: WebSocket) async {
-        guard let senderID, let contactID else {
+        guard let contactID, let senderID else {
             try? await ws.close(code: .unexpectedServerError)
             return
         }
@@ -109,8 +109,13 @@ actor MessageController: RouteCollection {
             let message = Message(contactID: contactID, senderID: senderID, text: incoming.text)
             do {
                 try await message.save(on: req.db)
-                let ongoing = MessageResponse(id: try message.requireID(), text: incoming.text, senderID: senderID, isRead: false)
-                let encoded = try encoder.encode(ongoing)
+                let messageResponse = MessageResponse(
+                    id: try message.requireID(),
+                    text: incoming.text,
+                    senderID: senderID,
+                    isRead: false
+                )
+                let encoded = try encoder.encode(messageResponse)
                 
                 for webSocket in await self?.webSocketStore.get(for: contactID) ?? [] {
                     try await webSocket.send([UInt8](encoded))
@@ -126,7 +131,7 @@ actor MessageController: RouteCollection {
         await webSocketStore.remove(for: contactID, with: userID)
     }
     
-    private func validateContactID(req: Request) throws -> Int {
+    private func validateContactID(req: Request) throws -> ContactID {
         guard let contactIDString = req.parameters.get("contact_id"), let contactID = Int(contactIDString) else {
             throw Abort(.badRequest, reason: "Contact id invalid", identifier: "contact_id_invalid")
         }
