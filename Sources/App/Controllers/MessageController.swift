@@ -42,6 +42,29 @@ actor MessageController: RouteCollection {
         return MessagesResponse(messages: try raws.map { try $0.decode(model: MessageResponse.self) })
     }
     
+    private func messageSubquery(contactID: ContactID, request: MessagesIndexRequest) -> SQLSubquery {
+        var messageSubquery = SQLSubqueryBuilder()
+            .column(SQLLiteral.all)
+            .from("messages")
+            .where("contact_id", .equal, contactID)
+        
+        if let beforeMessageId = request.beforeMessageID {
+            messageSubquery = messageSubquery
+                .where("id", .lessThan, beforeMessageId)
+                .orderBy("id", .descending)
+        } else if let afterMessageId = request.afterMessageID {
+            messageSubquery = messageSubquery
+                .where("id", .greaterThan, afterMessageId)
+                .orderBy("id", .ascending)
+        }
+        
+        if let limit = request.limit {
+            messageSubquery = messageSubquery.limit(limit)
+        }
+        
+        return messageSubquery.query
+    }
+    
     @Sendable
     private func updateToMessagesChannel(req: Request) async throws -> HTTPHeaders? {
         let payload = try req.auth.require(Payload.self)
@@ -100,29 +123,6 @@ actor MessageController: RouteCollection {
     private func close(_ ws: WebSocket, for contactID: ContactID, with userID: UserID) async throws {
         try await ws.close(code: .unacceptableData)
         await webSocketStore.remove(for: contactID, with: userID)
-    }
-    
-    private func messageSubquery(contactID: Int, request: MessagesIndexRequest) -> SQLSubquery {
-        var messageSubquery = SQLSubqueryBuilder()
-            .column(SQLLiteral.all)
-            .from("messages")
-            .where("contact_id", .equal, contactID)
-        
-        if let beforeMessageId = request.beforeMessageID {
-            messageSubquery = messageSubquery
-                .where("id", .lessThan, beforeMessageId)
-                .orderBy("id", .descending)
-        } else if let afterMessageId = request.afterMessageID {
-            messageSubquery = messageSubquery
-                .where("id", .greaterThan, afterMessageId)
-                .orderBy("id", .ascending)
-        }
-        
-        if let limit = request.limit {
-            messageSubquery = messageSubquery.limit(limit)
-        }
-        
-        return messageSubquery.query
     }
     
     private func validateContactID(req: Request) throws -> Int {
