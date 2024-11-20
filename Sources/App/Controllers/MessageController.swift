@@ -144,20 +144,3 @@ actor MessageController: RouteCollection {
         }
     }
 }
-
-extension Message {
-    func toResponse(db: Database) async throws -> MessageResponse {
-        let sender = try await $sender.get(on: db)
-        return MessageResponse(id: try requireID(), text: text, senderID: try sender.requireID(), isRead: isRead)
-    }
-}
-
-extension [Message] {
-    func toResponse(db: Database) async throws -> MessagesResponse {
-        var messageResponses = [MessageResponse]()
-        for message in self {
-            try await messageResponses.append(message.toResponse(db: db))
-        }
-        return MessagesResponse(messages: messageResponses)
-    }
-}
