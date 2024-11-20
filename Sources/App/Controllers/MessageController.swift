@@ -2,17 +2,25 @@ import Fluent
 import Vapor
 import SQLKit
 
+typealias ContactID = Int
+typealias UserID = Int
+
 actor MessageController: RouteCollection {
-    private var defaultLimit: Int { 20 }
-    private var contactID: Int?
-    private var senderID: Int?
+    private var contactID: ContactID?
+    private var senderID: UserID?
+    
+    private let webSocketStore: WebSocketStore
+    
+    init(webSocketStore: WebSocketStore) {
+        self.webSocketStore = webSocketStore
+    }
     
     nonisolated func boot(routes: RoutesBuilder) throws {
         let protected = routes.grouped("contacts", ":contact_id", "messages")
             .grouped(AccessTokenGuardMiddleware(), UserAuthenticator())
         
         protected.get(use: index)
-        protected.webSocket(shouldUpgrade: updateToMessagesChannel, onUpgrade: messagesChannel)
+        protected.webSocket("channel", shouldUpgrade: updateToMessagesChannel, onUpgrade: messagesChannel)
     }
     
     @Sendable
@@ -48,26 +56,31 @@ actor MessageController: RouteCollection {
     
     @Sendable
     private func messagesChannel(req: Request, ws: WebSocket) async {
-        ws.onClose.whenComplete { _ in
-            // TODO: close all ws
+        guard let senderID, let contactID else {
+            try? await ws.close(code: .unexpectedServerError)
+            return
         }
         
-        ws.onText { ws, text in
-            try? await ws.close(code: .unacceptableData)
+        await webSocketStore.add(ws, for: contactID, with: senderID)
+        
+        ws.onClose.whenComplete { [weak webSocketStore] _ in
+            Task {
+                await webSocketStore?.remove(for: contactID, with: senderID)
+            }
         }
         
-        ws.onBinary { [senderID, contactID] ws, data in
+        ws.onText { [weak self] ws, text in
+            try? await self?.close(ws, for: contactID, with: senderID)
+        }
+        
+        ws.onBinary { [weak self] ws, data in
             let decoder = JSONDecoder()
             let encoder = JSONEncoder()
             
-            guard let incoming = try? decoder.decode(IncomingMessage.self, from: data),
-                  let senderID,
-                  let contactID else {
-                try? await ws.close(code: .unacceptableData)
+            guard let incoming = try? decoder.decode(IncomingMessage.self, from: data) else {
+                try? await self?.close(ws, for: contactID, with: senderID)
                 return
             }
-            
-            print("Incoming text: \(incoming.text)")
             
             let message = Message(contactID: contactID, senderID: senderID, text: incoming.text)
             do {
@@ -75,11 +88,18 @@ actor MessageController: RouteCollection {
                 let ongoing = MessageResponse(id: try message.requireID(), text: incoming.text, senderID: senderID, isRead: false)
                 let encoded = try encoder.encode(ongoing)
                 
-                try await ws.send([UInt8](encoded))
+                for webSocket in await self?.webSocketStore.get(for: contactID) ?? [] {
+                    try await webSocket.send([UInt8](encoded))
+                }
             } catch {
                 print("error: \(error.localizedDescription)")
             }
         }
+    }
+    
+    private func close(_ ws: WebSocket, for contactID: ContactID, with userID: UserID) async throws {
+        try await ws.close(code: .unacceptableData)
+        await webSocketStore.remove(for: contactID, with: userID)
     }
     
     private func messageSubquery(contactID: Int, request: MessagesIndexRequest) -> SQLSubquery {
@@ -98,7 +118,11 @@ actor MessageController: RouteCollection {
                 .orderBy("id", .ascending)
         }
         
-        return messageSubquery.limit(request.limit ?? defaultLimit).query
+        if let limit = request.limit {
+            messageSubquery = messageSubquery.limit(limit)
+        }
+        
+        return messageSubquery.query
     }
     
     private func validateContactID(req: Request) throws -> Int {
@@ -109,7 +133,7 @@ actor MessageController: RouteCollection {
         return contactID
     }
     
-    private func checkContactExist(userID: Int, contactID: Int, db: Database) async throws {
+    private func checkContactExist(userID: UserID, contactID: ContactID, db: Database) async throws {
         guard try await Contact.query(on: db).group(.or, { group in
                 group.filter(\.$user1.$id == userID).filter(\.$user2.$id == userID)
             })
