@@ -114,7 +114,8 @@ actor MessageController: RouteCollection {
                     id: try message.requireID(),
                     text: message.text,
                     senderID: senderID,
-                    isRead: message.isRead
+                    isRead: message.isRead,
+                    createdAt: message.createdAt
                 )
                 let data = try encoder.encode(messageResponse)
                 await self?.send(data: [UInt8](data), for: contactID, logger: req.logger, retry: 1)

@@ -19,8 +19,8 @@ final class Message: Model, @unchecked Sendable {
     @Field(key: "is_read")
     var isRead: Bool
     
-    @Timestamp(key: "created_by", on: .create)
-    var createdBy: Date?
+    @Timestamp(key: "created_at", on: .create)
+    var createdAt: Date?
     
     init() {}
     
