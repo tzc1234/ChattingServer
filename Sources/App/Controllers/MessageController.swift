@@ -109,19 +109,32 @@ actor MessageController: RouteCollection {
             let message = Message(contactID: contactID, senderID: senderID, text: incoming.text)
             do {
                 try await message.save(on: req.db)
+                
                 let messageResponse = MessageResponse(
                     id: try message.requireID(),
                     text: incoming.text,
                     senderID: senderID,
                     isRead: false
                 )
-                let encoded = try encoder.encode(messageResponse)
-                
-                for webSocket in await self?.webSocketStore.get(for: contactID) ?? [] {
-                    try await webSocket.send([UInt8](encoded))
-                }
+                let data = try encoder.encode(messageResponse)
+                await self?.send(data: [UInt8](data), for: contactID, retry: 1)
             } catch {
                 print("error: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    private func send(data: [UInt8], for contactID: ContactID, retry: UInt = 0) async {
+        for webSocket in await webSocketStore.get(for: contactID) {
+            do {
+                try await webSocket.send(data)
+            } catch {
+                print("WebSocket error occurred: \(error.localizedDescription)")
+                
+                if retry > 0 {
+                    print("Retry webSocket send again...")
+                    await send(data: data, for: contactID, retry: retry - 1)
+                }
             }
         }
     }
