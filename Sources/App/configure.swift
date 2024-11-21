@@ -4,7 +4,7 @@ import FluentSQLiteDriver
 import Vapor
 import JWT
 
-public func configure(_ app: Application) async throws {
+func configure(_ app: Application, dependenciesContainer: DependenciesContainer) async throws {
     // uncomment to serve files from /Public folder
     // app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
 
@@ -20,5 +20,5 @@ public func configure(_ app: Application) async throws {
     app.migrations.add(CreateMessage())
     try await app.autoMigrate()
     
-    try routes(app)
+    try routes(app, webSocketStore: dependenciesContainer.webSocketStore)
 }

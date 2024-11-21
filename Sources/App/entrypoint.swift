@@ -3,6 +3,10 @@ import Logging
 import NIOCore
 import NIOPosix
 
+final class DependenciesContainer {
+    let webSocketStore = WebSocketStore()
+}
+
 @main
 enum Entrypoint {
     static func main() async throws {
@@ -10,6 +14,7 @@ enum Entrypoint {
         try LoggingSystem.bootstrap(from: &env)
         
         let app = try await Application.make(env)
+        let dependenciesContainer = DependenciesContainer()
 
         // This attempts to install NIO as the Swift Concurrency global executor.
         // You can enable it if you'd like to reduce the amount of context switching between NIO and Swift Concurrency.
@@ -19,7 +24,7 @@ enum Entrypoint {
         // app.logger.debug("Tried to install SwiftNIO's EventLoopGroup as Swift's global concurrency executor", metadata: ["success": .stringConvertible(executorTakeoverSuccess)])
         
         do {
-            try await configure(app)
+            try await configure(app, dependenciesContainer: dependenciesContainer)
         } catch {
             app.logger.report(error: error)
             try? await app.asyncShutdown()

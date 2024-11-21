@@ -1,9 +1,7 @@
 import Fluent
 import Vapor
 
-let webSocketStore = WebSocketStore()
-
-func routes(_ app: Application) throws {
+func routes(_ app: Application, webSocketStore: WebSocketStore) throws {
     app.get { req async in
         "It works!"
     }
