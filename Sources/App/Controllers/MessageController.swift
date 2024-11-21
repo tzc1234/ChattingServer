@@ -21,15 +21,16 @@ actor MessageController: RouteCollection {
         
         protected.get(use: index)
         protected.webSocket("channel", shouldUpgrade: upgradeToMessagesChannel, onUpgrade: messagesChannel)
+        protected.patch("read", use: readMessages)
     }
     
     @Sendable
     private func index(req: Request) async throws -> MessagesResponse {
         let contactID = try validateContactID(req: req)
         let indexRequest = try req.query.decode(MessagesIndexRequest.self)
-        let payload = try req.auth.require(Payload.self)
+        let userID = try req.auth.require(Payload.self).userID
         
-        try await checkContactExist(userID: payload.userID, contactID: contactID, db: req.db)
+        try await checkContactExist(userID: userID, contactID: contactID, db: req.db)
         
         guard let sql = req.db as? SQLDatabase else {
             throw MessageError.databaseError
@@ -68,12 +69,12 @@ actor MessageController: RouteCollection {
     
     @Sendable
     private func upgradeToMessagesChannel(req: Request) async throws -> HTTPHeaders? {
-        let payload = try req.auth.require(Payload.self)
+        let userID = try req.auth.require(Payload.self).userID
         let contactID = try validateContactID(req: req)
-        try await checkContactExist(userID: payload.userID, contactID: contactID, db: req.db)
+        try await checkContactExist(userID: userID, contactID: contactID, db: req.db)
         
         self.contactID = contactID
-        self.senderID = payload.userID
+        self.senderID = userID
         
         return [:]
     }
@@ -162,5 +163,32 @@ actor MessageController: RouteCollection {
         else {
             throw MessageError.contactNotFound
         }
+    }
+    
+    @Sendable
+    private func readMessages(req: Request) async throws -> Response {
+        let userID = try req.auth.require(Payload.self).userID
+        let contactID = try validateContactID(req: req)
+        let untilMessageID = try req.content.decode(ReadMessageRequest.self).untilMessageID
+        
+        guard let contact = try await Contact.query(on: req.db)
+            .group(.or, { group in
+                group.filter(\.$user1.$id == userID).filter(\.$user2.$id == userID)
+            })
+            .filter(\.$id == contactID)
+            .first()
+        else {
+            throw MessageError.contactNotFound
+        }
+        
+        let messagesQuery = contact.$messages
+            .query(on: req.db)
+            .filter(\.$id <= untilMessageID)
+            .filter(\.$sender.$id != userID)
+            .filter(\.$isRead == false)
+        
+        try await messagesQuery.set(\.$isRead, to: true).update()
+        
+        return Response()
     }
 }
