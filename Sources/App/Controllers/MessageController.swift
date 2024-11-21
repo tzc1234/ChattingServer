@@ -32,7 +32,7 @@ actor MessageController: RouteCollection {
         try await checkContactExist(userID: payload.userID, contactID: contactID, db: req.db)
         
         guard let sql = req.db as? SQLDatabase else {
-            throw Abort(.internalServerError, reason: "database error", identifier: "database_error")
+            throw MessageError.databaseError
         }
             
         let raws = try await sql.select()
@@ -147,7 +147,7 @@ actor MessageController: RouteCollection {
     
     private func validateContactID(req: Request) throws -> ContactID {
         guard let contactIDString = req.parameters.get("contact_id"), let contactID = Int(contactIDString) else {
-            throw Abort(.badRequest, reason: "Contact id invalid", identifier: "contact_id_invalid")
+            throw MessageError.contactIDInvalid
         }
         
         return contactID
@@ -160,7 +160,7 @@ actor MessageController: RouteCollection {
             .filter(\.$id == contactID)
             .count() > 0
         else {
-            throw Abort(.notFound, reason: "Contact not found", identifier: "contact_not_found")
+            throw MessageError.contactNotFound
         }
     }
 }
