@@ -133,7 +133,7 @@ actor MessageController: RouteCollection {
                 logger.error(Logger.Message(stringLiteral: error.localizedDescription))
                 
                 if retry > 0 {
-                    print("Retry webSocket send again...")
+                    logger.info(Logger.Message(stringLiteral: "Retry webSocket send..."))
                     await send(data: data, for: contactID, logger: logger, retry: retry - 1)
                 }
             }
