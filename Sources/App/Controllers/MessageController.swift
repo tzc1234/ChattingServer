@@ -39,31 +39,72 @@ actor MessageController: RouteCollection {
             
         let raws = try await sql.select()
             .column(SQLLiteral.all)
-            .from(messageSubquery(contactID: contactID, request: indexRequest))
+            .from(messageSubquery(contactID: contactID, userID: userID, request: indexRequest, sql: sql))
             .orderBy("id", .ascending)
             .all()
         return MessagesResponse(messages: try raws.map { try $0.decode(model: MessageResponse.self) })
     }
     
-    private func messageSubquery(contactID: ContactID, request: MessagesIndexRequest) -> SQLSubquery {
+    private func messageSubquery(contactID: ContactID,
+                                 userID: UserID,
+                                 request: MessagesIndexRequest,
+                                 sql: SQLDatabase) async throws -> SQLSubquery {
         var messageSubquery = SQLSubqueryBuilder()
             .column(SQLLiteral.all)
             .from("messages")
             .where("contact_id", .equal, contactID)
         
-        if let beforeMessageId = request.beforeMessageID {
-            messageSubquery = messageSubquery
+        let limit = request.limit ?? defaultLimit
+        
+        messageSubquery = if let beforeMessageId = request.beforeMessageID {
+            messageSubquery
                 .where("id", .lessThan, beforeMessageId)
                 .orderBy("id", .descending)
         } else if let afterMessageId = request.afterMessageID {
-            messageSubquery = messageSubquery
+            messageSubquery
                 .where("id", .greaterThan, afterMessageId)
                 .orderBy("id", .ascending)
+        } else if let middleMessageID = try await middleMessageID(currentUserID: userID, contactID: contactID, limit: limit, on: sql) {
+            messageSubquery
+                .where("id", .greaterThanOrEqual, middleMessageID)
+                .orderBy("id", .ascending)
+        } else {
+            messageSubquery
+                .orderBy("id", .descending)
         }
         
-        messageSubquery = messageSubquery.limit(request.limit ?? defaultLimit)
+        return messageSubquery.limit(limit).query
+    }
+    
+    private func middleMessageID(currentUserID: UserID, contactID: ContactID, limit: Int, on sql: SQLDatabase) async throws -> Int? {
+        let middle = limit / 2 + 1
+        let middleMessageIDAtLast = SQLSubqueryBuilder()
+            .column("id")
+            .from("messages")
+            .where("id", .lessThanOrEqual, firstUnreadMessageID(currentUserID: currentUserID, contactID: contactID))
+            .where("contact_id", .equal, contactID)
+            .orderBy("id", .descending)
+            .limit(middle)
+            .query
         
-        return messageSubquery.query
+        let extractMiddleMessageID = try await sql.select()
+            .column("id")
+            .from(middleMessageIDAtLast)
+            .orderBy("id", .ascending)
+            .limit(1)
+            .first()
+        return try extractMiddleMessageID?.decode(column: "id", inferringAs: Int.self)
+    }
+    
+    private func firstUnreadMessageID(currentUserID: UserID, contactID: ContactID) -> SQLSubquery {
+        SQLSubqueryBuilder()
+            .column("id")
+            .from("messages")
+            .where("contact_id", .equal, contactID)
+            .where("sender_id", .notEqual, currentUserID)
+            .where("is_read", .equal, false)
+            .limit(1)
+            .query
     }
     
     @Sendable
