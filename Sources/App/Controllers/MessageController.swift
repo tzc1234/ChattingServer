@@ -6,6 +6,7 @@ typealias ContactID = Int
 typealias UserID = Int
 
 actor MessageController: RouteCollection {
+    private var defaultLimit: Int { 20 }
     private var contactID: ContactID?
     private var senderID: UserID?
     
@@ -60,9 +61,7 @@ actor MessageController: RouteCollection {
                 .orderBy("id", .ascending)
         }
         
-        if let limit = request.limit {
-            messageSubquery = messageSubquery.limit(limit)
-        }
+        messageSubquery = messageSubquery.limit(request.limit ?? defaultLimit)
         
         return messageSubquery.query
     }
