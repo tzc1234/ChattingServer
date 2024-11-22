@@ -181,13 +181,13 @@ actor MessageController: RouteCollection {
             throw MessageError.contactNotFound
         }
         
-        let messagesQuery = contact.$messages
+        try await contact.$messages
             .query(on: req.db)
             .filter(\.$id <= untilMessageID)
             .filter(\.$sender.$id != userID)
             .filter(\.$isRead == false)
-        
-        try await messagesQuery.set(\.$isRead, to: true).update()
+            .set(\.$isRead, to: true)
+            .update()
         
         return Response()
     }
