@@ -155,9 +155,8 @@ actor MessageController: RouteCollection {
     }
     
     private func checkContactExist(userID: UserID, contactID: ContactID, db: Database) async throws {
-        guard try await Contact.query(on: db).group(.or, { group in
-                group.filter(\.$user1.$id == userID).filter(\.$user2.$id == userID)
-            })
+        guard try await Contact.query(on: db)
+            .filter(by: userID)
             .filter(\.$id == contactID)
             .count() > 0
         else {
@@ -172,9 +171,7 @@ actor MessageController: RouteCollection {
         let untilMessageID = try req.content.decode(ReadMessageRequest.self).untilMessageID
         
         guard let contact = try await Contact.query(on: req.db)
-            .group(.or, { group in
-                group.filter(\.$user1.$id == userID).filter(\.$user2.$id == userID)
-            })
+            .filter(by: userID)
             .filter(\.$id == contactID)
             .first()
         else {

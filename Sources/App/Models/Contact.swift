@@ -41,3 +41,11 @@ extension Contact {
         $messages.query(on: db).filter(\.$isRead == false)
     }
 }
+
+extension QueryBuilder<Contact> {
+    func filter(by userID: Int) -> Self {
+        group(.or, { group in
+            group.filter(\.$user1.$id == userID).filter(\.$user2.$id == userID)
+        })
+    }
+}

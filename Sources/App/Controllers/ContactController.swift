@@ -52,7 +52,7 @@ struct ContactController: RouteCollection {
     
     private func getContactsResponse(for currentUserID: Int, on db: Database) async throws -> ContactsResponse {
         return try await Contact.query(on: db)
-            .group(.or) { $0.filter(\.$user1.$id == currentUserID).filter(\.$user2.$id == currentUserID) }
+            .filter(by: currentUserID)
             .with(\.$blockedBy)
             .all()
             .toResponse(currentUserID: currentUserID, db: db)
