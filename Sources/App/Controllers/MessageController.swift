@@ -107,6 +107,51 @@ actor MessageController: RouteCollection {
             .query
     }
     
+    private func validateContactID(req: Request) throws -> ContactID {
+        guard let contactIDString = req.parameters.get("contact_id"), let contactID = Int(contactIDString) else {
+            throw MessageError.contactIDInvalid
+        }
+        
+        return contactID
+    }
+    
+    @Sendable
+    private func readMessages(req: Request) async throws -> Response {
+        let userID = try req.auth.require(Payload.self).userID
+        let contactID = try validateContactID(req: req)
+        let untilMessageID = try req.content.decode(ReadMessageRequest.self).untilMessageID
+        
+        guard let contact = try await Contact.query(on: req.db)
+            .filter(by: userID)
+            .filter(\.$id == contactID)
+            .first()
+        else {
+            throw MessageError.contactNotFound
+        }
+        
+        try await contact.$messages
+            .query(on: req.db)
+            .filter(\.$id <= untilMessageID)
+            .filter(\.$sender.$id != userID)
+            .filter(\.$isRead == false)
+            .set(\.$isRead, to: true)
+            .update()
+        
+        return Response()
+    }
+    
+    private func checkContactExist(userID: UserID, contactID: ContactID, db: Database) async throws {
+        guard try await Contact.query(on: db)
+            .filter(by: userID)
+            .filter(\.$id == contactID)
+            .count() > 0
+        else {
+            throw MessageError.contactNotFound
+        }
+    }
+}
+
+extension MessageController {
     @Sendable
     private func upgradeToMessagesChannel(req: Request) async throws -> HTTPHeaders? {
         let userID = try req.auth.require(Payload.self).userID
@@ -184,48 +229,5 @@ actor MessageController: RouteCollection {
     private func close(_ ws: WebSocket, for contactID: ContactID, with userID: UserID) async throws {
         try await ws.close(code: .unacceptableData)
         await webSocketStore.remove(for: contactID, with: userID)
-    }
-    
-    private func validateContactID(req: Request) throws -> ContactID {
-        guard let contactIDString = req.parameters.get("contact_id"), let contactID = Int(contactIDString) else {
-            throw MessageError.contactIDInvalid
-        }
-        
-        return contactID
-    }
-    
-    private func checkContactExist(userID: UserID, contactID: ContactID, db: Database) async throws {
-        guard try await Contact.query(on: db)
-            .filter(by: userID)
-            .filter(\.$id == contactID)
-            .count() > 0
-        else {
-            throw MessageError.contactNotFound
-        }
-    }
-    
-    @Sendable
-    private func readMessages(req: Request) async throws -> Response {
-        let userID = try req.auth.require(Payload.self).userID
-        let contactID = try validateContactID(req: req)
-        let untilMessageID = try req.content.decode(ReadMessageRequest.self).untilMessageID
-        
-        guard let contact = try await Contact.query(on: req.db)
-            .filter(by: userID)
-            .filter(\.$id == contactID)
-            .first()
-        else {
-            throw MessageError.contactNotFound
-        }
-        
-        try await contact.$messages
-            .query(on: req.db)
-            .filter(\.$id <= untilMessageID)
-            .filter(\.$sender.$id != userID)
-            .filter(\.$isRead == false)
-            .set(\.$isRead, to: true)
-            .update()
-        
-        return Response()
     }
 }
