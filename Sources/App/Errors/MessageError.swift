@@ -4,6 +4,7 @@ enum MessageError: AbortError, DebuggableError {
     case databaseError
     case contactIDInvalid
     case contactNotFound
+    case contactIsBlocked
     
     var status: HTTPResponseStatus {
         switch self {
@@ -13,6 +14,8 @@ enum MessageError: AbortError, DebuggableError {
             .badRequest
         case .contactNotFound:
             .notFound
+        case .contactIsBlocked:
+            .badRequest
         }
     }
     
@@ -24,6 +27,8 @@ enum MessageError: AbortError, DebuggableError {
             "Contact id invalid"
         case .contactNotFound:
             "Contact not found"
+        case .contactIsBlocked:
+            "Contact is blocked"
         }
     }
     
@@ -35,6 +40,8 @@ enum MessageError: AbortError, DebuggableError {
             "contact_id_invalid"
         case .contactNotFound:
             "contact_not_found"
+        case .contactIsBlocked:
+            "contact_is_blocked"
         }
     }
 }

@@ -45,6 +45,16 @@ actor MessageController: RouteCollection {
         return MessagesResponse(messages: try raws.map { try $0.decode(model: MessageResponse.self) })
     }
     
+    private func checkContactExist(userID: UserID, contactID: ContactID, db: Database) async throws {
+        guard try await Contact.query(on: db)
+            .filter(by: userID)
+            .filter(\.$id == contactID)
+            .count() > 0
+        else {
+            throw MessageError.contactNotFound
+        }
+    }
+    
     private func messageSubquery(contactID: ContactID,
                                  userID: UserID,
                                  request: MessagesIndexRequest,
@@ -121,14 +131,7 @@ actor MessageController: RouteCollection {
         let contactID = try validateContactID(req: req)
         let untilMessageID = try req.content.decode(ReadMessageRequest.self).untilMessageID
         
-        guard let contact = try await Contact.query(on: req.db)
-            .filter(by: userID)
-            .filter(\.$id == contactID)
-            .first()
-        else {
-            throw MessageError.contactNotFound
-        }
-        
+        let contact = try await getContact(userID: userID, contactID: contactID, db: req.db)
         try await contact.$messages
             .query(on: req.db)
             .filter(\.$id <= untilMessageID)
@@ -140,14 +143,16 @@ actor MessageController: RouteCollection {
         return Response()
     }
     
-    private func checkContactExist(userID: UserID, contactID: ContactID, db: Database) async throws {
-        guard try await Contact.query(on: db)
+    private func getContact(userID: UserID, contactID: ContactID, db: Database) async throws -> Contact {
+        guard let contact = try await Contact.query(on: db)
             .filter(by: userID)
             .filter(\.$id == contactID)
-            .count() > 0
+            .first()
         else {
             throw MessageError.contactNotFound
         }
+        
+        return contact
     }
 }
 
@@ -156,7 +161,11 @@ extension MessageController {
     private func upgradeToMessagesChannel(req: Request) async throws -> HTTPHeaders? {
         let userID = try req.auth.require(Payload.self).userID
         let contactID = try validateContactID(req: req)
-        try await checkContactExist(userID: userID, contactID: contactID, db: req.db)
+        
+        let contact = try await getContact(userID: userID, contactID: contactID, db: req.db)
+        guard contact.$blockedBy.id == nil else {
+            throw MessageError.contactIsBlocked
+        }
         
         self.contactID = contactID
         self.senderID = userID
