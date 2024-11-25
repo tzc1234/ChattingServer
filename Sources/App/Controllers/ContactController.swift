@@ -14,7 +14,7 @@ struct ContactController: RouteCollection {
     private func index(req: Request) async throws -> ContactsResponse {
         let payload = try req.auth.require(Payload.self)
         let currentUserID = payload.userID
-        return try await getContactsResponse(for: currentUserID, on: req.db)
+        return try await getContactsResponse(for: currentUserID, req: req)
     }
     
     @Sendable
@@ -23,7 +23,7 @@ struct ContactController: RouteCollection {
         let contactRequest = try req.content.decode(ContactRequest.self)
         let currentUserID = payload.userID
         try await newContact(for: currentUserID, with: contactRequest.responderEmail, on: req.db)
-        return try await getContactsResponse(for: currentUserID, on: req.db)
+        return try await getContactsResponse(for: currentUserID, req: req)
     }
     
     private func newContact(for currentUserID: Int, with responderEmail: String, on db: Database) async throws {
@@ -50,27 +50,27 @@ struct ContactController: RouteCollection {
         try await contact.save(on: db)
     }
     
-    private func getContactsResponse(for currentUserID: Int, on db: Database) async throws -> ContactsResponse {
-        return try await Contact.query(on: db)
+    private func getContactsResponse(for currentUserID: Int, req: Request) async throws -> ContactsResponse {
+        return try await Contact.query(on: req.db)
             .filter(by: currentUserID)
             .with(\.$blockedBy)
             .all()
-            .toResponse(currentUserID: currentUserID, db: db)
+            .toResponse(currentUserID: currentUserID, req: req)
     }
 }
 
 private extension [Contact] {
-    func toResponse(currentUserID: Int, db: Database) async throws -> ContactsResponse {
+    func toResponse(currentUserID: Int, req: Request) async throws -> ContactsResponse {
         var contactResponses = [ContactResponse]()
         for contact in self {
-            let responder = try await loadResponder(from: contact, currentUserID: currentUserID, on: db)
+            let responder = try await loadResponder(from: contact, currentUserID: currentUserID, on: req.db)
             
             contactResponses.append(
                 ContactResponse(
                     id: try contact.requireID(),
-                    responder: responder.toResponse(),
+                    responder: responder.toResponse(app: req.application),
                     blockedByUserEmail: contact.blockedBy?.email,
-                    unreadMessageCount: try await contact.unreadMessagesCount(db: db)
+                    unreadMessageCount: try await contact.unreadMessagesCount(db: req.db)
                 )
             )
         }

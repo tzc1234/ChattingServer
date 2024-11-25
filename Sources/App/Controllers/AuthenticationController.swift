@@ -25,9 +25,27 @@ struct AuthenticationController: RouteCollection {
     @Sendable
     private func register(req: Request) async throws -> TokenResponse {
         try RegisterRequest.validate(content: req)
+        let request = try req.content.decode(RegisterRequest.self)
         
-        let user = try req.content.decode(RegisterRequest.self).toModel()
+        var savedAvatarFilename: String?
+        if let avatar = request.avatar {
+            let filename = avatar.filename
+            if !(filename.lowercased().hasSuffix(".jpg") ||
+                 filename.lowercased().hasSuffix(".jpeg") ||
+                 filename.lowercased().hasSuffix(".png")) {
+                throw Abort(.unsupportedMediaType, reason: "Only accept .jpg, .jpeg, or .png files.")
+            }
+            
+            let imageFilename = "\(Date().timeIntervalSince1970)_\(filename)"
+            let imageFilePath = req.application.directory.publicDirectory + Constants.AVATARS_DIRECTORY + imageFilename
+            try await req.fileio.writeFile(avatar.data, at: imageFilePath)
+            
+            savedAvatarFilename = imageFilename
+        }
+        
+        let user = request.toModel()
         user.password = try await req.password.async.hash(user.password)
+        user.avatarFilename = savedAvatarFilename
         try await user.save(on: req.db)
         
         return try await newTokenResponse(for: user, req: req)
@@ -74,7 +92,11 @@ struct AuthenticationController: RouteCollection {
     
     private func newTokenResponse(for user: User, req: Request) async throws -> TokenResponse {
         let (accessToken, refreshToken) = try await newTokens(for: user, req: req)
-        return TokenResponse(user: user.toResponse(), accessToken: accessToken, refreshToken: refreshToken)
+        return TokenResponse(
+            user: user.toResponse(app: req.application),
+            accessToken: accessToken,
+            refreshToken: refreshToken
+        )
     }
     
     private func newTokens(for user: User, req: Request) async throws -> (accessToken: String, refreshToken: String) {
@@ -95,6 +117,6 @@ struct AuthenticationController: RouteCollection {
             throw AuthenticationError.userNotFound
         }
         
-        return UserResponse(id: try user.requireID(), name: user.name, email: user.email)
+        return user.toResponse(app: req.application)
     }
 }

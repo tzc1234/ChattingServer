@@ -5,8 +5,7 @@ import Vapor
 import JWT
 
 func configure(_ app: Application, dependenciesContainer: DependenciesContainer) async throws {
-    // uncomment to serve files from /Public folder
-    // app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
+    app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
 
     app.databases.use(DatabaseConfigurationFactory.sqlite(.file("db.sqlite")), as: .sqlite)
     app.passwords.use(.bcrypt)
@@ -19,6 +18,8 @@ func configure(_ app: Application, dependenciesContainer: DependenciesContainer)
     app.migrations.add(CreateContact())
     app.migrations.add(CreateMessage())
     try await app.autoMigrate()
+    
+    app.routes.defaultMaxBodySize = "5mb"
     
     try routes(app, webSocketStore: dependenciesContainer.webSocketStore)
 }

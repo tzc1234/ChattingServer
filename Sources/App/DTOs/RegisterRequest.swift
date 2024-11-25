@@ -6,6 +6,7 @@ struct RegisterRequest: Content {
     let name: String
     let email: String
     let password: String
+    let avatar: File?
 }
 
 extension RegisterRequest {
