@@ -8,7 +8,7 @@ struct ContactController: RouteCollection {
         
         protected.get(use: index)
         protected.post(use: create)
-        protected.patch(":contact_id", use: block)
+        protected.patch(":contact_id", "block", use: block)
     }
     
     @Sendable
