@@ -8,20 +8,19 @@ struct ContactController: RouteCollection {
         
         protected.get(use: index)
         protected.post(use: create)
+        protected.patch(":contact_id", use: block)
     }
     
     @Sendable
     private func index(req: Request) async throws -> ContactsResponse {
-        let payload = try req.auth.require(Payload.self)
-        let currentUserID = payload.userID
+        let currentUserID = try req.auth.require(Payload.self).userID
         return try await getContactsResponse(for: currentUserID, req: req)
     }
     
     @Sendable
     private func create(req: Request) async throws -> ContactsResponse {
-        let payload = try req.auth.require(Payload.self)
+        let currentUserID = try req.auth.require(Payload.self).userID
         let contactRequest = try req.content.decode(ContactRequest.self)
-        let currentUserID = payload.userID
         try await newContact(for: currentUserID, with: contactRequest.responderEmail, on: req.db)
         return try await getContactsResponse(for: currentUserID, req: req)
     }
@@ -57,31 +56,63 @@ struct ContactController: RouteCollection {
             .all()
             .toResponse(currentUserID: currentUserID, req: req)
     }
+    
+    @Sendable
+    private func block(req: Request) async throws -> ContactResponse {
+        guard let contactIDString = req.parameters.get("contact_id"), let contactID = Int(contactIDString) else {
+            throw ContactError.contactIDInvalid
+        }
+        
+        let currentUserID = try req.auth.require(Payload.self).userID
+        guard let contact = try await getContact(for: currentUserID, contactID: contactID, req: req) else {
+            throw ContactError.contactNotFound
+        }
+        
+        guard contact.blockedBy == nil else {
+            throw ContactError.contactAlreadyBlocked
+        }
+        
+        contact.$blockedBy.id = currentUserID
+        try await contact.update(on: req.db)
+        
+        return try await contact.toRequest(currentUserID: currentUserID, req: req)
+    }
+    
+    private func getContact(for currentUserID: Int, contactID: Int, req: Request) async throws -> Contact? {
+        try await Contact.query(on: req.db)
+            .filter(by: currentUserID)
+            .filter(\.$id == contactID)
+            .with(\.$blockedBy)
+            .first()
+    }
+}
+
+private extension Contact {
+    func toRequest(currentUserID: Int, req: Request) async throws -> ContactResponse {
+        let blockedBy = try await $blockedBy.get(on: req.db)
+        return ContactResponse(
+            id: try requireID(),
+            responder: try await loadResponder(currentUserID: currentUserID, on: req.db).toResponse(app: req.application),
+            blockedByUserEmail: blockedBy?.email,
+            unreadMessageCount: try await unreadMessagesCount(db: req.db)
+        )
+    }
+    
+    private func loadResponder(currentUserID: Int, on db: Database) async throws -> User {
+        if $user1.id != currentUserID {
+            try await $user1.get(on: db)
+        } else {
+            try await $user2.get(on: db)
+        }
+    }
 }
 
 private extension [Contact] {
     func toResponse(currentUserID: Int, req: Request) async throws -> ContactsResponse {
         var contactResponses = [ContactResponse]()
         for contact in self {
-            let responder = try await loadResponder(from: contact, currentUserID: currentUserID, on: req.db)
-            
-            contactResponses.append(
-                ContactResponse(
-                    id: try contact.requireID(),
-                    responder: responder.toResponse(app: req.application),
-                    blockedByUserEmail: contact.blockedBy?.email,
-                    unreadMessageCount: try await contact.unreadMessagesCount(db: req.db)
-                )
-            )
+            contactResponses.append(try await contact.toRequest(currentUserID: currentUserID, req: req))
         }
         return ContactsResponse(contacts: contactResponses)
-    }
-    
-    private func loadResponder(from contact: Contact, currentUserID: Int, on db: Database) async throws -> User {
-        if contact.$user1.id != currentUserID {
-            try await contact.$user1.get(on: db)
-        } else {
-            try await contact.$user2.get(on: db)
-        }
     }
 }
