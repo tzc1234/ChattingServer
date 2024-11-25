@@ -75,7 +75,7 @@ struct ContactController: RouteCollection {
         contact.$blockedBy.id = currentUserID
         try await contact.update(on: req.db)
         
-        return try await contact.toRequest(currentUserID: currentUserID, req: req)
+        return try await contact.toResponse(currentUserID: currentUserID, req: req)
     }
     
     private func getContact(for currentUserID: Int, contactID: Int, req: Request) async throws -> Contact? {
@@ -88,13 +88,12 @@ struct ContactController: RouteCollection {
 }
 
 private extension Contact {
-    func toRequest(currentUserID: Int, req: Request) async throws -> ContactResponse {
-        let blockedBy = try await $blockedBy.get(on: req.db)
-        return ContactResponse(
-            id: try requireID(),
-            responder: try await loadResponder(currentUserID: currentUserID, on: req.db).toResponse(app: req.application),
-            blockedByUserEmail: blockedBy?.email,
-            unreadMessageCount: try await unreadMessagesCount(db: req.db)
+    func toResponse(currentUserID: Int, req: Request) async throws -> ContactResponse {
+        try ContactResponse(
+            id: requireID(),
+            responder: await loadResponder(currentUserID: currentUserID, on: req.db).toResponse(app: req.application),
+            blockedByUserID: $blockedBy.id,
+            unreadMessageCount: await unreadMessagesCount(db: req.db)
         )
     }
     
@@ -111,7 +110,7 @@ private extension [Contact] {
     func toResponse(currentUserID: Int, req: Request) async throws -> ContactsResponse {
         var contactResponses = [ContactResponse]()
         for contact in self {
-            contactResponses.append(try await contact.toRequest(currentUserID: currentUserID, req: req))
+            contactResponses.append(try await contact.toResponse(currentUserID: currentUserID, req: req))
         }
         return ContactsResponse(contacts: contactResponses)
     }
