@@ -59,6 +59,6 @@ struct AuthenicationTests: AppTests {
                                      email: String = "a@email.com",
                                      password: String = "password123",
                                      avatar: File? = nil) -> RegisterRequest {
-        RegisterRequest(id: nil, name: name, email: email, password: password, avatar: avatar)
+        RegisterRequest(name: name, email: email, password: password, avatar: avatar)
     }
 }
