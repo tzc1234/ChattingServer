@@ -8,7 +8,11 @@ struct ContactController: RouteCollection {
         
         protected.get(use: index)
         protected.post(use: create)
-        protected.patch(":contact_id", "block", use: block)
+        
+        protected.group(":contact_id") { routes in
+            routes.patch("block", use: block)
+            routes.patch("unblock", use: unblock)
+        }
     }
     
     @Sendable
@@ -59,11 +63,9 @@ struct ContactController: RouteCollection {
     
     @Sendable
     private func block(req: Request) async throws -> ContactResponse {
-        guard let contactIDString = req.parameters.get("contact_id"), let contactID = Int(contactIDString) else {
-            throw ContactError.contactIDInvalid
-        }
-        
+        let contactID = try extractContactID(from: req.parameters)
         let currentUserID = try req.auth.require(Payload.self).userID
+        
         guard let contact = try await getContact(for: currentUserID, contactID: contactID, req: req) else {
             throw ContactError.contactNotFound
         }
@@ -76,6 +78,36 @@ struct ContactController: RouteCollection {
         try await contact.update(on: req.db)
         
         return try await contact.toResponse(currentUserID: currentUserID, req: req)
+    }
+    
+    @Sendable func unblock(req: Request) async throws -> ContactResponse {
+        let contactID = try extractContactID(from: req.parameters)
+        let currentUserID = try req.auth.require(Payload.self).userID
+        
+        guard let contact = try await getContact(for: currentUserID, contactID: contactID, req: req) else {
+            throw ContactError.contactNotFound
+        }
+        
+        guard contact.blockedBy != nil else {
+            throw ContactError.contactIsNotBlocked
+        }
+        
+        guard contact.$blockedBy.id == currentUserID else {
+            throw ContactError.contactIsNotBlockedByCurrentUser
+        }
+        
+        contact.$blockedBy.id = nil
+        try await contact.update(on: req.db)
+        
+        return try await contact.toResponse(currentUserID: currentUserID, req: req)
+    }
+    
+    private func extractContactID(from parameters: Parameters) throws -> Int {
+        guard let contactIDString = parameters.get("contact_id"), let contactID = Int(contactIDString) else {
+            throw ContactError.contactIDInvalid
+        }
+        
+        return contactID
     }
     
     private func getContact(for currentUserID: Int, contactID: Int, req: Request) async throws -> Contact? {

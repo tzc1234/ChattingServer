@@ -6,6 +6,8 @@ enum ContactError: AbortError, DebuggableError {
     case contactIDInvalid
     case contactNotFound
     case contactAlreadyBlocked
+    case contactIsNotBlocked
+    case contactIsNotBlockedByCurrentUser
     
     var status: HTTPResponseStatus {
         switch self {
@@ -18,6 +20,10 @@ enum ContactError: AbortError, DebuggableError {
         case .contactNotFound:
             .notFound
         case .contactAlreadyBlocked:
+            .badRequest
+        case .contactIsNotBlocked:
+            .badRequest
+        case .contactIsNotBlockedByCurrentUser:
             .badRequest
         }
     }
@@ -34,6 +40,10 @@ enum ContactError: AbortError, DebuggableError {
             "Contact not found"
         case .contactAlreadyBlocked:
             "Contact is already blocked"
+        case .contactIsNotBlocked:
+            "Contact is not blocked"
+        case .contactIsNotBlockedByCurrentUser:
+            "Contact is not blocked by current user"
         }
     }
     
@@ -49,6 +59,10 @@ enum ContactError: AbortError, DebuggableError {
             "contact_not_found"
         case .contactAlreadyBlocked:
             "contact_already_blocked"
+        case .contactIsNotBlocked:
+            "contact_not_blocked"
+        case .contactIsNotBlockedByCurrentUser:
+            "contact_not_blocked_by_current_user"
         }
     }
 }
