@@ -21,6 +21,22 @@ struct AuthenicationTests: AppTests {
         }
     }
     
+    @Test("register user failure with invalid email")
+    func registerUserWithInvalidEmail() async throws {
+        let invalidEmail = "a.com"
+        let registerRequest = makeRegisterRequest(email: invalidEmail)
+        
+        try await withApp { app in
+            try await app.test(.POST, .apiPath("register"), beforeRequest: { req in
+                try req.content.encode(registerRequest)
+            }, afterResponse: { res async throws in
+                #expect(res.status == .badRequest)
+                let error = try res.content.decode(ErrorData.self)
+                #expect(error.reason == "email is not a valid email address")
+            })
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeRegisterRequest(name: String = "a name",
