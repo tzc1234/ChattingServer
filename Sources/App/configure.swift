@@ -10,7 +10,7 @@ func configure(_ app: Application, dependenciesContainer: DependenciesContainer)
     if app.environment == .testing {
         app.databases.use(.sqlite(.memory), as: .sqlite)
     } else {
-        app.databases.use(DatabaseConfigurationFactory.sqlite(.file("db.sqlite")), as: .sqlite)
+        app.databases.use(.sqlite(.file("db.sqlite")), as: .sqlite)
     }
     
     app.passwords.use(.bcrypt)
