@@ -3,7 +3,7 @@ import Vapor
 
 struct AuthenticationController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {
-        routes.on(.POST, "register", body: .collect(maxSize: "3mb"), use: register)
+        routes.on(.POST, "register", body: .collect(maxSize: "1mb"), use: register)
         
         routes.group("login") { loginRoute in
             loginRoute.post(use: login)

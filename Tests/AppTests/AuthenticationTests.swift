@@ -71,6 +71,20 @@ struct AuthenicationTests: AppTests {
         }
     }
     
+    @Test("register user failure with too large avatar file")
+    func registerUserWithLargeAvatarFile() async throws {
+        try await withApp { app in
+            let file = try largeImageFile(app)
+            let registerRequest = makeRegisterRequest(avatar: file)
+            
+            try await app.testable(method: .running).test(.POST, .apiPath("register"), beforeRequest: { req in
+                try req.content.encode(registerRequest, as: .formData)
+            }, afterResponse: { res async throws in
+                #expect(res.status == .payloadTooLarge)
+            })
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeRegisterRequest(name: String = "a name",
@@ -78,5 +92,15 @@ struct AuthenicationTests: AppTests {
                                      password: String = "password123",
                                      avatar: File? = nil) -> RegisterRequest {
         RegisterRequest(name: name, email: email, password: password, avatar: avatar)
+    }
+    
+    private func largeImageFile(_ app: Application) throws -> File {
+        let fileURL = URL(fileURLWithPath: testResourceDirectory(app) + "more_than_2mb.jpg")
+        let fileData = try Data(contentsOf: fileURL)
+        return File(data: .init(data: fileData), filename: "more_than_2mb.jpg")
+    }
+    
+    private func testResourceDirectory(_ app: Application) -> String {
+        app.directory.workingDirectory + "/Tests/AppTests/Resources/"
     }
 }
