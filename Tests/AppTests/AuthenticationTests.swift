@@ -11,7 +11,7 @@ struct AuthenicationTests: AppTests {
         let registerRequest = makeRegisterRequest(name: shortName)
         
         try await withApp { app in
-            try await app.test(.POST, "api/v1/register", beforeRequest: { req in
+            try await app.test(.POST, .apiPath("register"), beforeRequest: { req in
                 try req.content.encode(registerRequest)
             }, afterResponse: { res async throws in
                 #expect(res.status == .badRequest)
@@ -22,6 +22,7 @@ struct AuthenicationTests: AppTests {
     }
     
     // MARK: - Helpers
+    
     private func makeRegisterRequest(name: String = "a name",
                                      email: String = "a@email.com",
                                      password: String = "password123",
