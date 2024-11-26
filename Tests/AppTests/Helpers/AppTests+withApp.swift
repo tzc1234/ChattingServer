@@ -1,22 +1,31 @@
 @testable import App
 import XCTVapor
 
-protocol AppTests {
-    func withApp(_ test: (Application) async throws -> ()) async throws
-    func withApp(dependenciesContainer: DependenciesContainer,
-                 _ test: (Application) async throws -> ()) async throws
-}
+protocol AppTests {}
 
 extension AppTests {
     func withApp(_ test: (Application) async throws -> ()) async throws {
-        try await withApp(dependenciesContainer: DependenciesContainer(), test)
+        try await withApp(
+            avatarFilename: { $0 },
+            avatarDirectoryPath: { "avatarDirectory" },
+            webSocketStore: WebSocketStore(),
+            test
+        )
     }
     
-    func withApp(dependenciesContainer: DependenciesContainer,
+    func withApp(avatarFilename: @escaping @Sendable (String) -> (String),
+                 avatarDirectoryPath: @escaping @Sendable () -> (String),
+                 webSocketStore: WebSocketStore,
                  _ test: (Application) async throws -> ()) async throws {
         let app = try await Application.make(.testing)
         do {
-            try await configure(app, dependenciesContainer: dependenciesContainer)
+            try await configure(app)
+            try routes(
+                app,
+                avatarFilename: avatarFilename,
+                avatarDirectoryPath: avatarDirectoryPath,
+                webSocketStore: webSocketStore
+            )
             try await test(app)
             try await app.autoRevert()
         }

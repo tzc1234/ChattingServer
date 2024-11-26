@@ -4,7 +4,7 @@ import FluentSQLiteDriver
 import Vapor
 import JWT
 
-func configure(_ app: Application, dependenciesContainer: DependenciesContainer) async throws {
+func configure(_ app: Application) async throws {
     app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
 
     if app.environment == .testing {
@@ -23,6 +23,4 @@ func configure(_ app: Application, dependenciesContainer: DependenciesContainer)
     app.migrations.add(CreateContact())
     app.migrations.add(CreateMessage())
     try await app.autoMigrate()
-    
-    try routes(app, webSocketStore: dependenciesContainer.webSocketStore)
 }

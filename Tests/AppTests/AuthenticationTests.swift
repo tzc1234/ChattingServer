@@ -4,14 +4,14 @@ import Testing
 import Fluent
 import Vapor
 
-@Suite("Authenication routes tests")
+@Suite("Authenication routes tests", .serialized)
 struct AuthenicationTests: AppTests {
     @Test("register user failure with short name")
     func registerUserWithShortName() async throws {
         let shortName = "a"
         let registerRequest = makeRegisterRequest(name: shortName)
         
-        try await withApp { app in
+        try await makeApp { app in
             try await app.test(.POST, .apiPath("register"), beforeRequest: { req in
                 try req.content.encode(registerRequest)
             }, afterResponse: { res async throws in
@@ -27,7 +27,7 @@ struct AuthenicationTests: AppTests {
         let shortPassword = "p"
         let registerRequest = makeRegisterRequest(password: shortPassword)
         
-        try await withApp { app in
+        try await makeApp { app in
             try await app.test(.POST, .apiPath("register"), beforeRequest: { req in
                 try req.content.encode(registerRequest)
             }, afterResponse: { res async throws in
@@ -43,7 +43,7 @@ struct AuthenicationTests: AppTests {
         let invalidEmail = "a.com"
         let registerRequest = makeRegisterRequest(email: invalidEmail)
         
-        try await withApp { app in
+        try await makeApp { app in
             try await app.test(.POST, .apiPath("register"), beforeRequest: { req in
                 try req.content.encode(registerRequest)
             }, afterResponse: { res async throws in
@@ -60,7 +60,7 @@ struct AuthenicationTests: AppTests {
         let file = File(data: .init(data: fileData), filename: "test.txt")
         let registerRequest = makeRegisterRequest(avatar: file)
         
-        try await withApp { app in
+        try await makeApp { app in
             try await app.test(.POST, .apiPath("register"), beforeRequest: { req in
                 try req.content.encode(registerRequest)
             }, afterResponse: { res async throws in
@@ -73,7 +73,7 @@ struct AuthenicationTests: AppTests {
     
     @Test("register user failure with too large avatar file")
     func registerUserWithLargeAvatarFile() async throws {
-        try await withApp { app in
+        try await makeApp { app in
             let file = try largeImageFile(app)
             let registerRequest = makeRegisterRequest(avatar: file)
             
@@ -85,13 +85,70 @@ struct AuthenicationTests: AppTests {
         }
     }
     
+    @Test("register user success")
+    func registerUserSuccess() async throws {
+        try await makeApp { app in
+            let file = try smallImageFile(app)
+            let registerRequest = makeRegisterRequest(avatar: file)
+            
+            try await app.testable(method: .running).test(.POST, .apiPath("register"), beforeRequest: { req in
+                try req.content.encode(registerRequest, as: .formData)
+            }, afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                let token = try res.content.decode(TokenResponse.self)
+                #expect(token.user.name == registerRequest.name)
+                #expect(token.user.email == registerRequest.email)
+                #expect(token.user.avatarURL == uploadedAvatarLink(app: app))
+            })
+        }
+    }
+    
     // MARK: - Helpers
+    
+    private func makeApp(file: StaticString = #filePath,
+                         _ test: (Application) async throws -> ()) async throws {
+        try await withApp(
+            avatarFilename: { _ in testAvatarFileName },
+            avatarDirectoryPath: {
+                var pathComponents = String(describing: file).pathComponents
+                pathComponents.removeLast()
+                
+                var components = pathComponents.map(\.description)
+                components.append(testAvatarDirectory)
+                
+                let directoryPath = components.joined(separator: "/")
+                return "/\(directoryPath)/"
+            },
+            webSocketStore: WebSocketStore(),
+            test
+        )
+    }
     
     private func makeRegisterRequest(name: String = "a name",
                                      email: String = "a@email.com",
                                      password: String = "password123",
                                      avatar: File? = nil) -> RegisterRequest {
         RegisterRequest(name: name, email: email, password: password, avatar: avatar)
+    }
+    
+    private func uploadedAvatarLink(app: Application) -> String {
+        let baseURL = app.http.server.configuration.hostname
+        let port = app.http.server.configuration.port
+        return "http://\(baseURL):\(port)/\(testAvatarDirectory)/\(testAvatarFileName)"
+    }
+    
+    private var testAvatarFileName: String {
+        "test_avatar.png"
+    }
+    
+    private var testAvatarDirectory: String {
+        "uploaded_avatars"
+    }
+    
+    private func smallImageFile(_ app: Application) throws -> File {
+        let fileURL = URL(fileURLWithPath: testResourceDirectory(app) + "small_avatar.png")
+        let fileData = try Data(contentsOf: fileURL)
+        return File(data: .init(data: fileData), filename: "small_avatar.png")
     }
     
     private func largeImageFile(_ app: Application) throws -> File {
@@ -101,6 +158,6 @@ struct AuthenicationTests: AppTests {
     }
     
     private func testResourceDirectory(_ app: Application) -> String {
-        app.directory.workingDirectory + "/Tests/AppTests/Resources/"
+        app.directory.workingDirectory + "Tests/AppTests/Resources/"
     }
 }
