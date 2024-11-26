@@ -4,5 +4,12 @@ struct UserResponse: Content {
     let id: Int?
     let name: String
     let email: String
-    let avatar: String?
+    let avatarURL: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case email
+        case avatarURL = "avatar_url"
+    }
 }

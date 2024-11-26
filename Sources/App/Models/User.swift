@@ -43,7 +43,7 @@ extension User {
             id: id,
             name: name,
             email: email,
-            avatar: avatarLink(app: app)
+            avatarURL: avatarLink(app: app)
         )
     }
     
