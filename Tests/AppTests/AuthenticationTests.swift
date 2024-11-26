@@ -2,6 +2,7 @@
 import XCTVapor
 import Testing
 import Fluent
+import Vapor
 
 @Suite("Authenication routes tests")
 struct AuthenicationTests: AppTests {
@@ -49,6 +50,23 @@ struct AuthenicationTests: AppTests {
                 #expect(res.status == .badRequest)
                 let error = try res.content.decode(ErrorData.self)
                 #expect(error.reason == "email is not a valid email address")
+            })
+        }
+    }
+    
+    @Test("register user failure with invalid avatar file type")
+    func registerUserWithInvalidAvatarFileType() async throws {
+        let fileData = "test".data(using: .utf8)!
+        let file = File(data: .init(data: fileData), filename: "test.txt")
+        let registerRequest = makeRegisterRequest(avatar: file)
+        
+        try await withApp { app in
+            try await app.test(.POST, .apiPath("register"), beforeRequest: { req in
+                try req.content.encode(registerRequest)
+            }, afterResponse: { res async throws in
+                #expect(res.status == .unsupportedMediaType)
+                let error = try res.content.decode(ErrorData.self)
+                #expect(error.reason == "Only accept .jpg, .jpeg, or .png files.")
             })
         }
     }
