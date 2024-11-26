@@ -21,6 +21,22 @@ struct AuthenicationTests: AppTests {
         }
     }
     
+    @Test("register user failure with short password")
+    func registerUserWithShortPassword() async throws {
+        let shortPassword = "p"
+        let registerRequest = makeRegisterRequest(password: shortPassword)
+        
+        try await withApp { app in
+            try await app.test(.POST, .apiPath("register"), beforeRequest: { req in
+                try req.content.encode(registerRequest)
+            }, afterResponse: { res async throws in
+                #expect(res.status == .badRequest)
+                let error = try res.content.decode(ErrorData.self)
+                #expect(error.reason == "password is less than minimum of 3 character(s)")
+            })
+        }
+    }
+    
     @Test("register user failure with invalid email")
     func registerUserWithInvalidEmail() async throws {
         let invalidEmail = "a.com"
