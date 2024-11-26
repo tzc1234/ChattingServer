@@ -19,7 +19,5 @@ func configure(_ app: Application, dependenciesContainer: DependenciesContainer)
     app.migrations.add(CreateMessage())
     try await app.autoMigrate()
     
-    app.routes.defaultMaxBodySize = "5mb"
-    
     try routes(app, webSocketStore: dependenciesContainer.webSocketStore)
 }
