@@ -191,6 +191,19 @@ struct AuthenticationTests: AppTests {
         }
     }
     
+    @Test("get current user failure with no access token")
+    func getCurrentUserFailureWithNoAccessToken() async throws {
+        try await makeApp { app in
+            app.middleware.use(AccessTokenGuardMiddleware())
+            
+            try await app.test(.POST, .apiPath("me"), afterResponse: { res async throws in
+                #expect(res.status == .unauthorized)
+                let error = try res.content.decode(ErrorResponse.self)
+                #expect(error.reason == "Access token invalid")
+            })
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(_ test: (Application) async throws -> (),
