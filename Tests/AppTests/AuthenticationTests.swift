@@ -4,7 +4,7 @@ import Testing
 import Fluent
 import Vapor
 
-@Suite("Authentication routes tests", .serialized)
+@Suite("Authentication routes tests")
 struct AuthenticationTests: AppTests {
     @Test("register user failure with short name")
     func registerUserWithShortName() async throws {
@@ -77,7 +77,7 @@ struct AuthenticationTests: AppTests {
             let largeAvatar = try largeImageFile(app)
             let registerRequest = makeRegisterRequest(avatar: largeAvatar)
             
-            try await app.testable(method: .running).test(.POST, .apiPath("register"), beforeRequest: { req in
+            try await app.testable(method: .running(hostname: "localhost", port: 8082)).test(.POST, .apiPath("register"), beforeRequest: { req in
                 try req.content.encode(registerRequest, as: .formData)
             }, afterResponse: { res async throws in
                 #expect(res.status == .payloadTooLarge)

@@ -3,7 +3,7 @@ import XCTVapor
 import Testing
 import Fluent
 
-@Suite("Localhost initial tests", .serialized)
+@Suite("Localhost initial tests")
 struct LocalhostTests: AppTests {
     @Test("Test localhost Route")
     func localhostRoute() async throws {
