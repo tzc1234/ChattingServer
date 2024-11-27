@@ -16,7 +16,7 @@ struct AuthenicationTests: AppTests {
                 try req.content.encode(registerRequest)
             }, afterResponse: { res async throws in
                 #expect(res.status == .badRequest)
-                let error = try res.content.decode(ErrorData.self)
+                let error = try res.content.decode(ErrorResponse.self)
                 #expect(error.reason == "name is less than minimum of 3 character(s)")
             })
         }
@@ -32,7 +32,7 @@ struct AuthenicationTests: AppTests {
                 try req.content.encode(registerRequest)
             }, afterResponse: { res async throws in
                 #expect(res.status == .badRequest)
-                let error = try res.content.decode(ErrorData.self)
+                let error = try res.content.decode(ErrorResponse.self)
                 #expect(error.reason == "password is less than minimum of 3 character(s)")
             })
         }
@@ -48,7 +48,7 @@ struct AuthenicationTests: AppTests {
                 try req.content.encode(registerRequest)
             }, afterResponse: { res async throws in
                 #expect(res.status == .badRequest)
-                let error = try res.content.decode(ErrorData.self)
+                let error = try res.content.decode(ErrorResponse.self)
                 #expect(error.reason == "email is not a valid email address")
             })
         }
@@ -65,7 +65,7 @@ struct AuthenicationTests: AppTests {
                 try req.content.encode(registerRequest)
             }, afterResponse: { res async throws in
                 #expect(res.status == .unsupportedMediaType)
-                let error = try res.content.decode(ErrorData.self)
+                let error = try res.content.decode(ErrorResponse.self)
                 #expect(error.reason == "Only accept .jpg, .jpeg, or .png files.")
             })
         }

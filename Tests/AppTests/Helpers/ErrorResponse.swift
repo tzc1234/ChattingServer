@@ -1,6 +1,6 @@
 import Foundation
 
-struct ErrorData: Codable {
+struct ErrorResponse: Codable {
     let error: Bool
     let reason: String
 }
