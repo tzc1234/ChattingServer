@@ -128,7 +128,7 @@ struct AuthenticationTests: AppTests {
         let loginRequest = LoginRequest(email: email, password: password)
         
         try await makeApp { app in
-            let oldToken = try await registerAUser(app, name: username, email: email, password: password)
+            let oldToken = try await createAUser(app, name: username, email: email, password: password)
             
             try await app.test(.POST, .apiPath("login"), beforeRequest: { req in
                 try req.content.encode(loginRequest)
@@ -157,6 +157,23 @@ struct AuthenticationTests: AppTests {
         }
     }
     
+    @Test("refresh token failure with an expired refresh token")
+    func refreshTokenFailureWithExpiredToken() async throws {
+        try await makeApp { app in
+            let expiredToken = "expired-token"
+            try await createAnExpiredRefreshToken(app, token: expiredToken)
+            let refreshTokenRequest = RefreshTokenRequest(refreshToken: expiredToken)
+            
+            try await app.test(.POST, .apiPath("refreshToken"), beforeRequest: { req in
+                try req.content.encode(refreshTokenRequest)
+            }, afterResponse: { res async throws in
+                #expect(res.status == .unauthorized)
+                let error = try res.content.decode(ErrorResponse.self)
+                #expect(error.reason == "Refresh token invalid")
+            })
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(_ test: (Application) async throws -> (),
@@ -169,11 +186,20 @@ struct AuthenticationTests: AppTests {
             afterShutdown: afterShutdown
         )
     }
+    
+    private func createAnExpiredRefreshToken(_ app: Application, token: String) async throws {
+        let user = User(name: "a username", email: "a@email.com", password: "aPassword")
+        try await user.save(on: app.db)
+        
+        let hashedRefreshToken = SHA256.hash(token)
+        let refreshToken = RefreshToken(token: hashedRefreshToken, userID: user.id!, expiresAt: .distantPast)
+        try await refreshToken.save(on: app.db)
+    }
 
-    private func registerAUser(_ app: Application,
-                               name: String = "a username",
-                               email: String = "a@email.com",
-                               password: String = "aPassword") async throws -> TokenResponse {
+    private func createAUser(_ app: Application,
+                             name: String = "a username",
+                             email: String = "a@email.com",
+                             password: String = "aPassword") async throws -> TokenResponse {
         let registerRequest = RegisterRequest(name: name, email: email, password: password, avatar: nil)
         var tokenResponse: TokenResponse?
         
