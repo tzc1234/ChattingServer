@@ -13,14 +13,8 @@ struct AuthenticationController: RouteCollection, Sendable {
     
     func boot(routes: RoutesBuilder) throws {
         routes.on(.POST, "register", body: .collect(maxSize: "1mb"), use: register)
-        
-        routes.group("login") { loginRoute in
-            loginRoute.post(use: login)
-        }
-        
-        routes.group("refreshToken") { route in
-            route.post(use: refreshToken)
-        }
+        routes.post("login", use: login)
+        routes.post("refreshToken", use: refreshToken)
         
         routes.grouped("me")
             .grouped(AccessTokenGuardMiddleware())
