@@ -120,6 +120,28 @@ struct AuthenticationTests: AppTests {
         }
     }
     
+    @Test("login success, generate new tokens")
+    func loginSuccess() async throws {
+        let username = "a username"
+        let password = "aPassword"
+        let email = "a@email.com"
+        let loginRequest = LoginRequest(email: email, password: password)
+        
+        try await makeApp { app in
+            let oldToken = try await registerAUser(app, name: username, email: email, password: password)
+            
+            try await app.test(.POST, .apiPath("login"), beforeRequest: { req in
+                try req.content.encode(loginRequest)
+            }, afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                let token = try res.content.decode(TokenResponse.self)
+                #expect(token.user == oldToken.user)
+                #expect(token.accessToken != oldToken.accessToken, "Expect a new access token")
+                #expect(token.refreshToken != oldToken.refreshToken, "Expect a new refresh token")
+            })
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(_ test: (Application) async throws -> (),
@@ -132,10 +154,26 @@ struct AuthenticationTests: AppTests {
             afterShutdown: afterShutdown
         )
     }
+
+    private func registerAUser(_ app: Application,
+                               name: String,
+                               email: String,
+                               password: String) async throws -> TokenResponse {
+        let registerRequest = RegisterRequest(name: name, email: email, password: password, avatar: nil)
+        var tokenResponse: TokenResponse?
+        
+        try await app.test(.POST, .apiPath("register"), beforeRequest: { req in
+            try req.content.encode(registerRequest)
+        }, afterResponse: { res async throws in
+            tokenResponse = try res.content.decode(TokenResponse.self)
+        })
+        
+        return tokenResponse!
+    }
     
-    private func makeRegisterRequest(name: String = "a name",
+    private func makeRegisterRequest(name: String = "a username",
                                      email: String = "a@email.com",
-                                     password: String = "password123",
+                                     password: String = "aPassword",
                                      avatar: File? = nil) -> RegisterRequest {
         RegisterRequest(name: name, email: email, password: password, avatar: avatar)
     }
