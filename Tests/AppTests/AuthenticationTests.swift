@@ -219,6 +219,23 @@ struct AuthenticationTests: AppTests {
         }
     }
     
+    @Test("get current user failure when user not found")
+    func getCurrentUserFailureWhenUserNotFound() async throws {
+        try await makeApp { app in
+            let user = User(id: 1, name: "a username", email: "a@email.com", password: "aPassword")
+            let payload = try Payload(for: user)
+            let accessToken = try await app.jwt.keys.sign(payload)
+            
+            try await app.test(.GET, .apiPath("me"), beforeRequest: { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
+            }, afterResponse: { res async throws in
+                #expect(res.status == .notFound)
+                let error = try res.content.decode(ErrorResponse.self)
+                #expect(error.reason == "User not found")
+            })
+        }
+    }
+    
     @Test("get current user success")
     func getCurrentUserSuccess() async throws {
         try await makeApp { app in
