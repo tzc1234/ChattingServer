@@ -215,7 +215,27 @@ struct AuthenticationTests: AppTests {
                 req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
             }, afterResponse: { res async throws in
                 #expect(res.status == .unauthorized)
-                
+            })
+        }
+    }
+    
+    @Test("get current user success")
+    func getCurrentUserSuccess() async throws {
+        try await makeApp { app in
+            let user = User(name: "a username", email: "a@email.com", password: "aPassword")
+            try await user.create(on: app.db)
+            
+            let payload = try Payload(for: user)
+            let accessToken = try await app.jwt.keys.sign(payload)
+            
+            try await app.test(.GET, .apiPath("me"), beforeRequest: { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
+            }, afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                let userResponse = try res.content.decode(UserResponse.self)
+                #expect(userResponse.id == user.id)
+                #expect(userResponse.name == user.name)
+                #expect(userResponse.email == user.email)
             })
         }
     }
