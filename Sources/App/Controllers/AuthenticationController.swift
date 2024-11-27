@@ -17,8 +17,7 @@ struct AuthenticationController: RouteCollection, Sendable {
         routes.post("refreshToken", use: refreshToken)
         
         routes.grouped("me")
-            .grouped(AccessTokenGuardMiddleware())
-            .group(UserAuthenticator()) { route in
+            .group(AccessTokenGuardMiddleware(), UserAuthenticator()) { route in
                 route.get(use: getCurrentUser)
             }
     }

@@ -128,7 +128,7 @@ struct AuthenticationTests: AppTests {
         let loginRequest = LoginRequest(email: email, password: password)
         
         try await makeApp { app in
-            let oldToken = try await createAUser(app, name: username, email: email, password: password)
+            let oldToken = try await createUserForTokenResponse(app, name: username, email: email, password: password)
             
             try await app.test(.POST, .apiPath("login"), beforeRequest: { req in
                 try req.content.encode(loginRequest)
@@ -177,7 +177,7 @@ struct AuthenticationTests: AppTests {
     @Test("refresh token success")
     func refreshTokenSuccess() async throws {
         try await makeApp { app in
-            let oldToken = try await createAUser(app)
+            let oldToken = try await createUserForTokenResponse(app)
             let refreshTokenRequest = RefreshTokenRequest(refreshToken: oldToken.refreshToken)
             
             try await app.test(.POST, .apiPath("refreshToken"), beforeRequest: { req in
@@ -194,12 +194,28 @@ struct AuthenticationTests: AppTests {
     @Test("get current user failure with no access token")
     func getCurrentUserFailureWithNoAccessToken() async throws {
         try await makeApp { app in
-            app.middleware.use(AccessTokenGuardMiddleware())
-            
-            try await app.test(.POST, .apiPath("me"), afterResponse: { res async throws in
+            try await app.test(.GET, .apiPath("me"), afterResponse: { res async throws in
                 #expect(res.status == .unauthorized)
                 let error = try res.content.decode(ErrorResponse.self)
                 #expect(error.reason == "Access token invalid")
+            })
+        }
+    }
+    
+    @Test("get current user failure with an expired payload")
+    func getCurrentUserFailureWithExpiredPayload() async throws {
+        try await makeApp { app in
+            let user = User(name: "a username", email: "a@email.com", password: "aPassword")
+            try await user.create(on: app.db)
+            
+            let payload = try Payload(for: user, expiration: .distantPast)
+            let accessToken = try await app.jwt.keys.sign(payload)
+            
+            try await app.test(.GET, .apiPath("me"), beforeRequest: { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
+            }, afterResponse: { res async throws in
+                #expect(res.status == .unauthorized)
+                
             })
         }
     }
@@ -226,10 +242,10 @@ struct AuthenticationTests: AppTests {
         try await refreshToken.save(on: app.db)
     }
 
-    private func createAUser(_ app: Application,
-                             name: String = "a username",
-                             email: String = "a@email.com",
-                             password: String = "aPassword") async throws -> TokenResponse {
+    private func createUserForTokenResponse(_ app: Application,
+                                            name: String = "a username",
+                                            email: String = "a@email.com",
+                                            password: String = "aPassword") async throws -> TokenResponse {
         let registerRequest = RegisterRequest(name: name, email: email, password: password, avatar: nil)
         var tokenResponse: TokenResponse?
         
