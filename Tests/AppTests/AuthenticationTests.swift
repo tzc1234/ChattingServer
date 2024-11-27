@@ -142,6 +142,21 @@ struct AuthenticationTests: AppTests {
         }
     }
     
+    @Test("refresh token failure with invalid refresh token")
+    func refreshTokenFailureWithInvalidToken() async throws {
+        let refreshTokenRequest = RefreshTokenRequest(refreshToken: "invalid-refresh-token")
+        
+        try await makeApp { app in
+            try await app.test(.POST, .apiPath("refreshToken"), beforeRequest: { req in
+                try req.content.encode(refreshTokenRequest)
+            }, afterResponse: { res async throws in
+                #expect(res.status == .unauthorized)
+                let error = try res.content.decode(ErrorResponse.self)
+                #expect(error.reason == "Refresh token invalid")
+            })
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(_ test: (Application) async throws -> (),
@@ -156,9 +171,9 @@ struct AuthenticationTests: AppTests {
     }
 
     private func registerAUser(_ app: Application,
-                               name: String,
-                               email: String,
-                               password: String) async throws -> TokenResponse {
+                               name: String = "a username",
+                               email: String = "a@email.com",
+                               password: String = "aPassword") async throws -> TokenResponse {
         let registerRequest = RegisterRequest(name: name, email: email, password: password, avatar: nil)
         var tokenResponse: TokenResponse?
         
