@@ -105,6 +105,21 @@ struct AuthenticationTests: AppTests {
         }
     }
     
+    @Test("login failure with an non-exist user")
+    func loginANonExistUser() async throws {
+        let loginRequest = LoginRequest(email: "non-exist@email.com", password: "non-exist")
+        
+        try await makeApp { app in
+            try await app.test(.POST, .apiPath("login"), beforeRequest: { req in
+                try req.content.encode(loginRequest)
+            }, afterResponse: { res async throws in
+                #expect(res.status == .notFound)
+                let error = try res.content.decode(ErrorResponse.self)
+                #expect(error.reason == "User not found")
+            })
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(_ test: (Application) async throws -> (),
