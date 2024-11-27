@@ -16,7 +16,8 @@ extension AppTests {
     func withApp(avatarFilename: @escaping @Sendable (String) -> (String),
                  avatarDirectoryPath: @escaping @Sendable () -> (String),
                  webSocketStore: WebSocketStore,
-                 _ test: (Application) async throws -> ()) async throws {
+                 _ test: (Application) async throws -> (),
+                 afterShutdown: () throws -> Void = {}) async throws {
         let app = try await Application.make(.testing)
         do {
             try await configure(app)
@@ -28,11 +29,11 @@ extension AppTests {
             )
             try await test(app)
             try await app.autoRevert()
-        }
-        catch {
+        } catch {
             try await app.asyncShutdown()
             throw error
         }
         try await app.asyncShutdown()
+        try afterShutdown()
     }
 }

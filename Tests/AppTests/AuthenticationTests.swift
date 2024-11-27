@@ -100,27 +100,22 @@ struct AuthenicationTests: AppTests {
                 #expect(token.user.email == registerRequest.email)
                 #expect(token.user.avatarURL == uploadedAvatarLink(app: app))
             })
+        } afterShutdown: {
+            try removeUploadedAvatars()
         }
     }
     
     // MARK: - Helpers
     
     private func makeApp(file: StaticString = #filePath,
-                         _ test: (Application) async throws -> ()) async throws {
+                         _ test: (Application) async throws -> (),
+                         afterShutdown: () throws -> Void = {}) async throws {
         try await withApp(
             avatarFilename: { _ in testAvatarFileName },
-            avatarDirectoryPath: {
-                var pathComponents = String(describing: file).pathComponents
-                pathComponents.removeLast()
-                
-                var components = pathComponents.map(\.description)
-                components.append(testAvatarDirectory)
-                
-                let directoryPath = components.joined(separator: "/")
-                return "/\(directoryPath)/"
-            },
+            avatarDirectoryPath: { testAvatarDirectoryPath(file: file) },
             webSocketStore: WebSocketStore(),
-            test
+            test,
+            afterShutdown: afterShutdown
         )
     }
     
@@ -131,10 +126,26 @@ struct AuthenicationTests: AppTests {
         RegisterRequest(name: name, email: email, password: password, avatar: avatar)
     }
     
+    private func removeUploadedAvatars(file: StaticString = #filePath) throws {
+        try FileManager.default.removeItem(atPath: testAvatarDirectoryPath(file: file))
+    }
+    
     private func uploadedAvatarLink(app: Application) -> String {
         let baseURL = app.http.server.configuration.hostname
         let port = app.http.server.configuration.port
         return "http://\(baseURL):\(port)/\(testAvatarDirectory)/\(testAvatarFileName)"
+    }
+    
+    private func testAvatarDirectoryPath(file: StaticString) -> String {
+        let pathComponents = String(describing: file).pathComponents
+        
+        var components = pathComponents.dropLast().map(\.description)
+        components.append(testAvatarDirectory)
+        
+        let directoryPath = components.joined(separator: "/")
+        let path = "/\(directoryPath)/"
+        
+        return "/\(directoryPath)/"
     }
     
     private var testAvatarFileName: String {
