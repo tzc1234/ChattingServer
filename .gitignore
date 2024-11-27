@@ -13,4 +13,3 @@ db.sqlite
 *.drawio
 *.bkp
 Public/avatars
-Tests/AppTests/uploaded_avatars

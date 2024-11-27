@@ -4,8 +4,8 @@ import Testing
 import Fluent
 import Vapor
 
-@Suite("Authenication routes tests", .serialized)
-struct AuthenicationTests: AppTests {
+@Suite("Authentication routes tests", .serialized)
+struct AuthenticationTests: AppTests {
     @Test("register user failure with short name")
     func registerUserWithShortName() async throws {
         let shortName = "a"
@@ -74,8 +74,8 @@ struct AuthenicationTests: AppTests {
     @Test("register user failure with too large avatar file")
     func registerUserWithLargeAvatarFile() async throws {
         try await makeApp { app in
-            let file = try largeImageFile(app)
-            let registerRequest = makeRegisterRequest(avatar: file)
+            let largeAvatar = try largeImageFile(app)
+            let registerRequest = makeRegisterRequest(avatar: largeAvatar)
             
             try await app.testable(method: .running).test(.POST, .apiPath("register"), beforeRequest: { req in
                 try req.content.encode(registerRequest, as: .formData)
@@ -88,8 +88,8 @@ struct AuthenicationTests: AppTests {
     @Test("register user success")
     func registerUserSuccess() async throws {
         try await makeApp { app in
-            let file = try smallImageFile(app)
-            let registerRequest = makeRegisterRequest(avatar: file)
+            let smallAvatar = try smallImageFile(app)
+            let registerRequest = makeRegisterRequest(avatar: smallAvatar)
             
             try await app.testable(method: .running).test(.POST, .apiPath("register"), beforeRequest: { req in
                 try req.content.encode(registerRequest, as: .formData)
@@ -107,12 +107,11 @@ struct AuthenicationTests: AppTests {
     
     // MARK: - Helpers
     
-    private func makeApp(file: StaticString = #filePath,
-                         _ test: (Application) async throws -> (),
+    private func makeApp(_ test: (Application) async throws -> (),
                          afterShutdown: () throws -> Void = {}) async throws {
         try await withApp(
             avatarFilename: { _ in testAvatarFileName },
-            avatarDirectoryPath: { testAvatarDirectoryPath(file: file) },
+            avatarDirectoryPath: { testAvatarDirectoryPath() },
             webSocketStore: WebSocketStore(),
             test,
             afterShutdown: afterShutdown
@@ -126,8 +125,11 @@ struct AuthenicationTests: AppTests {
         RegisterRequest(name: name, email: email, password: password, avatar: avatar)
     }
     
-    private func removeUploadedAvatars(file: StaticString = #filePath) throws {
-        try FileManager.default.removeItem(atPath: testAvatarDirectoryPath(file: file))
+    private func removeUploadedAvatars() throws {
+        let path = testAvatarDirectoryPath()
+        guard FileManager.default.fileExists(atPath: path) else { return }
+            
+        try FileManager.default.removeItem(atPath: path)
     }
     
     private func uploadedAvatarLink(app: Application) -> String {
@@ -136,15 +138,9 @@ struct AuthenicationTests: AppTests {
         return "http://\(baseURL):\(port)/\(testAvatarDirectory)/\(testAvatarFileName)"
     }
     
-    private func testAvatarDirectoryPath(file: StaticString) -> String {
-        let pathComponents = String(describing: file).pathComponents
-        
-        var components = pathComponents.dropLast().map(\.description)
-        components.append(testAvatarDirectory)
-        
-        let directoryPath = components.joined(separator: "/")
-        let path = "/\(directoryPath)/"
-        
+    private func testAvatarDirectoryPath() -> String {
+        let components = URL.temporaryDirectory.appending(component: testAvatarDirectory).absoluteString.pathComponents
+        let directoryPath = components.dropFirst().map(\.description).joined(separator: "/")
         return "/\(directoryPath)/"
     }
     
