@@ -174,6 +174,23 @@ struct AuthenticationTests: AppTests {
         }
     }
     
+    @Test("refresh token success")
+    func refreshTokenSuccess() async throws {
+        try await makeApp { app in
+            let oldToken = try await createAUser(app)
+            let refreshTokenRequest = RefreshTokenRequest(refreshToken: oldToken.refreshToken)
+            
+            try await app.test(.POST, .apiPath("refreshToken"), beforeRequest: { req in
+                try req.content.encode(refreshTokenRequest)
+            }, afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                let refreshToken = try res.content.decode(RefreshTokenResponse.self)
+                #expect(refreshToken.accessToken != oldToken.accessToken, "Expect a new access token")
+                #expect(refreshToken.refreshToken != oldToken.refreshToken, "Expect a new refresh token")
+            })
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(_ test: (Application) async throws -> (),
