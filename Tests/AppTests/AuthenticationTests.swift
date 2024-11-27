@@ -205,9 +205,7 @@ struct AuthenticationTests: AppTests {
     @Test("get current user failure with an expired payload")
     func getCurrentUserFailureWithExpiredPayload() async throws {
         try await makeApp { app in
-            let user = User(name: "a username", email: "a@email.com", password: "aPassword")
-            try await user.create(on: app.db)
-            
+            let user = try await createUser(app)
             let payload = try Payload(for: user, expiration: .distantPast)
             let accessToken = try await app.jwt.keys.sign(payload)
             
@@ -222,8 +220,8 @@ struct AuthenticationTests: AppTests {
     @Test("get current user failure when user not found")
     func getCurrentUserFailureWhenUserNotFound() async throws {
         try await makeApp { app in
-            let user = User(id: 1, name: "a username", email: "a@email.com", password: "aPassword")
-            let payload = try Payload(for: user)
+            let userNotFound = User(id: 1, name: "not found", email: "not-found@email.com", password: "aPassword")
+            let payload = try Payload(for: userNotFound)
             let accessToken = try await app.jwt.keys.sign(payload)
             
             try await app.test(.GET, .apiPath("me"), beforeRequest: { req in
@@ -239,9 +237,7 @@ struct AuthenticationTests: AppTests {
     @Test("get current user success")
     func getCurrentUserSuccess() async throws {
         try await makeApp { app in
-            let user = User(name: "a username", email: "a@email.com", password: "aPassword")
-            try await user.create(on: app.db)
-            
+            let user = try await createUser(app)
             let payload = try Payload(for: user)
             let accessToken = try await app.jwt.keys.sign(payload)
             
@@ -271,12 +267,19 @@ struct AuthenticationTests: AppTests {
     }
     
     private func createAnExpiredRefreshToken(_ app: Application, token: String) async throws {
-        let user = User(name: "a username", email: "a@email.com", password: "aPassword")
-        try await user.save(on: app.db)
-        
+        let user = try await createUser(app)
         let hashedRefreshToken = SHA256.hash(token)
         let refreshToken = RefreshToken(token: hashedRefreshToken, userID: user.id!, expiresAt: .distantPast)
         try await refreshToken.save(on: app.db)
+    }
+    
+    private func createUser(_ app: Application,
+                            name: String = "a username",
+                            email: String = "a@email.com",
+                            password: String = "aPassword") async throws -> User {
+        let user = User(name: name, email: email, password: password)
+        try await user.save(on: app.db)
+        return user
     }
 
     private func createUserForTokenResponse(_ app: Application,
