@@ -150,6 +150,21 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
+    @Test("get empty contacts")
+    func getEmptyContacts() async throws {
+        try await makeApp { app in
+            let currentUserToken = try await createUserForTokenResponse(app)
+            
+            try await app.test(.GET, .apiPath("contacts")) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
+            } afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                let contactsResponse = try res.content.decode(ContactsResponse.self)
+                #expect(contactsResponse.contacts.isEmpty)
+            }
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(avatarFilename: String = "filename.png",
