@@ -28,6 +28,22 @@ struct ContactTests: AppTests {
         }
     }
     
+    @Test("new contact failure with non-exist responder email")
+    func newContactFailureWithNonExistResponderEmail() async throws {
+        try await makeApp { app in
+            let nonExistResponderEmail = "non-exist@email.com"
+            let contactRequest = ContactRequest(responderEmail: nonExistResponderEmail)
+            let accessToken = try await createUserForTokenResponse(app).accessToken
+            
+            try await app.test(.POST, .apiPath("contacts")) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
+                try req.content.encode(contactRequest)
+            } afterResponse: { res async throws in
+                #expect(res.status == .notFound)
+            }
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(_ test: (Application) async throws -> ()) async throws {
@@ -38,5 +54,30 @@ struct ContactTests: AppTests {
             test,
             afterShutdown: {}
         )
+    }
+          
+    private func createUser(_ app: Application,
+                            name: String = "a username",
+                            email: String = "a@email.com",
+                            password: String = "aPassword") async throws -> User {
+        let user = User(name: name, email: email, password: password)
+        try await user.save(on: app.db)
+        return user
+    }
+    
+    private func createUserForTokenResponse(_ app: Application,
+                                            name: String = "a username",
+                                            email: String = "a@email.com",
+                                            password: String = "aPassword") async throws -> TokenResponse {
+        let registerRequest = RegisterRequest(name: name, email: email, password: password, avatar: nil)
+        var tokenResponse: TokenResponse?
+        
+        try await app.test(.POST, .apiPath("register"), beforeRequest: { req in
+            try req.content.encode(registerRequest)
+        }, afterResponse: { res async throws in
+            tokenResponse = try res.content.decode(TokenResponse.self)
+        })
+        
+        return tokenResponse!
     }
 }
