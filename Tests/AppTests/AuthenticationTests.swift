@@ -6,7 +6,7 @@ import Vapor
 
 @Suite("Authentication routes tests")
 struct AuthenticationTests: AppTests {
-    @Test("register user failure with short name")
+    @Test("register user failure with a short name")
     func registerUserWithShortName() async throws {
         let shortName = "a"
         let registerRequest = makeRegisterRequest(name: shortName)
@@ -22,7 +22,7 @@ struct AuthenticationTests: AppTests {
         }
     }
     
-    @Test("register user failure with short password")
+    @Test("register user failure with a short password")
     func registerUserWithShortPassword() async throws {
         let shortPassword = "p"
         let registerRequest = makeRegisterRequest(password: shortPassword)
@@ -38,7 +38,7 @@ struct AuthenticationTests: AppTests {
         }
     }
     
-    @Test("register user failure with invalid email")
+    @Test("register user failure with an invalid email")
     func registerUserWithInvalidEmail() async throws {
         let invalidEmail = "a.com"
         let registerRequest = makeRegisterRequest(email: invalidEmail)
@@ -54,7 +54,7 @@ struct AuthenticationTests: AppTests {
         }
     }
     
-    @Test("register user failure with invalid avatar file type")
+    @Test("register user failure with an invalid avatar file type")
     func registerUserWithInvalidAvatarFileType() async throws {
         let fileData = "test".data(using: .utf8)!
         let file = File(data: .init(data: fileData), filename: "test.txt")
@@ -71,7 +71,7 @@ struct AuthenticationTests: AppTests {
         }
     }
     
-    @Test("register user failure with too large avatar file")
+    @Test("register user failure with a too large avatar file")
     func registerUserWithLargeAvatarFile() async throws {
         try await makeApp { app in
             let largeAvatar = try largeImageFile(app)
@@ -88,8 +88,8 @@ struct AuthenticationTests: AppTests {
     @Test("register user success")
     func registerUserSuccess() async throws {
         try await makeApp { app in
-            let smallAvatar = try smallImageFile(app)
-            let registerRequest = makeRegisterRequest(avatar: smallAvatar)
+            let smallEnoughAvatar = try smallImageFile(app)
+            let registerRequest = makeRegisterRequest(avatar: smallEnoughAvatar)
             
             try await app.testable(method: .running).test(.POST, .apiPath("register"), beforeRequest: { req in
                 try req.content.encode(registerRequest, as: .formData)
@@ -120,7 +120,7 @@ struct AuthenticationTests: AppTests {
         }
     }
     
-    @Test("login success, generate new tokens")
+    @Test("login success and generate new tokens")
     func loginSuccess() async throws {
         let username = "a username"
         let password = "aPassword"
@@ -134,17 +134,18 @@ struct AuthenticationTests: AppTests {
                 try req.content.encode(loginRequest)
             }, afterResponse: { res async throws in
                 #expect(res.status == .ok)
-                let token = try res.content.decode(TokenResponse.self)
-                #expect(token.user == oldToken.user)
-                #expect(token.accessToken != oldToken.accessToken, "Expect a new access token")
-                #expect(token.refreshToken != oldToken.refreshToken, "Expect a new refresh token")
+                let newToken = try res.content.decode(TokenResponse.self)
+                #expect(newToken.user == oldToken.user)
+                #expect(newToken.accessToken != oldToken.accessToken, "Expect a new access token")
+                #expect(newToken.refreshToken != oldToken.refreshToken, "Expect a new refresh token")
             })
         }
     }
     
-    @Test("refresh token failure with invalid refresh token")
+    @Test("refresh token failure with an invalid refresh token")
     func refreshTokenFailureWithInvalidToken() async throws {
-        let refreshTokenRequest = RefreshTokenRequest(refreshToken: "invalid-refresh-token")
+        let invalidRefreshToken = "invalid-refresh-token"
+        let refreshTokenRequest = RefreshTokenRequest(refreshToken: invalidRefreshToken)
         
         try await makeApp { app in
             try await app.test(.POST, .apiPath("refreshToken"), beforeRequest: { req in
@@ -184,9 +185,9 @@ struct AuthenticationTests: AppTests {
                 try req.content.encode(refreshTokenRequest)
             }, afterResponse: { res async throws in
                 #expect(res.status == .ok)
-                let refreshToken = try res.content.decode(RefreshTokenResponse.self)
-                #expect(refreshToken.accessToken != oldToken.accessToken, "Expect a new access token")
-                #expect(refreshToken.refreshToken != oldToken.refreshToken, "Expect a new refresh token")
+                let newToken = try res.content.decode(RefreshTokenResponse.self)
+                #expect(newToken.accessToken != oldToken.accessToken, "Expect a new access token")
+                #expect(newToken.refreshToken != oldToken.refreshToken, "Expect a new refresh token")
             })
         }
     }
@@ -206,11 +207,11 @@ struct AuthenticationTests: AppTests {
     func getCurrentUserFailureWithExpiredPayload() async throws {
         try await makeApp { app in
             let user = try await createUser(app)
-            let payload = try Payload(for: user, expiration: .distantPast)
-            let accessToken = try await app.jwt.keys.sign(payload)
+            let expiredPayload = try Payload(for: user, expiration: .distantPast)
+            let expiredAccessToken = try await app.jwt.keys.sign(expiredPayload)
             
             try await app.test(.GET, .apiPath("me"), beforeRequest: { req in
-                req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
+                req.headers.bearerAuthorization = BearerAuthorization(token: expiredAccessToken)
             }, afterResponse: { res async throws in
                 #expect(res.status == .unauthorized)
             })
@@ -221,11 +222,11 @@ struct AuthenticationTests: AppTests {
     func getCurrentUserFailureWhenUserNotFound() async throws {
         try await makeApp { app in
             let userNotFound = User(id: 1, name: "not found", email: "not-found@email.com", password: "aPassword")
-            let payload = try Payload(for: userNotFound)
-            let accessToken = try await app.jwt.keys.sign(payload)
+            let notFoundPayload = try Payload(for: userNotFound)
+            let notFoundAccessToken = try await app.jwt.keys.sign(notFoundPayload)
             
             try await app.test(.GET, .apiPath("me"), beforeRequest: { req in
-                req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
+                req.headers.bearerAuthorization = BearerAuthorization(token: notFoundAccessToken)
             }, afterResponse: { res async throws in
                 #expect(res.status == .notFound)
                 let error = try res.content.decode(ErrorResponse.self)
@@ -259,7 +260,7 @@ struct AuthenticationTests: AppTests {
                          afterShutdown: () throws -> Void = {}) async throws {
         try await withApp(
             avatarFilename: { _ in testAvatarFileName },
-            avatarDirectoryPath: { testAvatarDirectoryPath() },
+            avatarDirectoryPath: { testAvatarDirectoryPath },
             webSocketStore: WebSocketStore(),
             test,
             afterShutdown: afterShutdown
@@ -306,7 +307,7 @@ struct AuthenticationTests: AppTests {
     }
     
     private func removeUploadedAvatars() throws {
-        let path = testAvatarDirectoryPath()
+        let path = testAvatarDirectoryPath
         guard FileManager.default.fileExists(atPath: path) else { return }
             
         try FileManager.default.removeItem(atPath: path)
@@ -318,7 +319,7 @@ struct AuthenticationTests: AppTests {
         return "http://\(baseURL):\(port)/\(testAvatarDirectory)/\(testAvatarFileName)"
     }
     
-    private func testAvatarDirectoryPath() -> String {
+    private var testAvatarDirectoryPath: String {
         let components = URL.temporaryDirectory.appending(component: testAvatarDirectory).absoluteString.pathComponents
         let directoryPath = components.dropFirst().map(\.description).joined(separator: "/")
         return "/\(directoryPath)/"
