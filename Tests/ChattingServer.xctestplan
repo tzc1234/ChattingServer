@@ -1,0 +1,29 @@
+{
+  "configurations" : [
+    {
+      "id" : "C4DBD6AD-4767-4449-89F1-4664EA85F7CD",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:",
+      "identifier" : "App",
+      "name" : "App"
+    },
+    "testExecutionOrdering" : "random"
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "AppTests",
+        "name" : "AppTests"
+      }
+    }
+  ],
+  "version" : 1
+}

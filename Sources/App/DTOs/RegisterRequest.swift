@@ -2,7 +2,6 @@ import Fluent
 import Vapor
 
 struct RegisterRequest: Content {
-    let id: Int?
     let name: String
     let email: String
     let password: String
@@ -12,7 +11,6 @@ struct RegisterRequest: Content {
 extension RegisterRequest {
     func toModel() -> User {
         let model = User()
-        model.id = id
         model.name = name
         model.email = email
         model.password = password

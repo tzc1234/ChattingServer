@@ -3,7 +3,7 @@ import Logging
 import NIOCore
 import NIOPosix
 
-final class DependenciesContainer {
+actor DependenciesContainer {
     let webSocketStore = WebSocketStore()
 }
 
@@ -23,8 +23,16 @@ enum Entrypoint {
         // let executorTakeoverSuccess = NIOSingletons.unsafeTryInstallSingletonPosixEventLoopGroupAsConcurrencyGlobalExecutor()
         // app.logger.debug("Tried to install SwiftNIO's EventLoopGroup as Swift's global concurrency executor", metadata: ["success": .stringConvertible(executorTakeoverSuccess)])
         
+        let avatarDirectory = app.directory.publicDirectory + Constants.AVATARS_DIRECTORY
+        
         do {
-            try await configure(app, dependenciesContainer: dependenciesContainer)
+            try await configure(app)
+            try routes(
+                app,
+                avatarFilename: { "\(Date().timeIntervalSince1970)_\($0)" },
+                avatarDirectoryPath: { avatarDirectory },
+                webSocketStore: dependenciesContainer.webSocketStore
+            )
         } catch {
             app.logger.report(error: error)
             try? await app.asyncShutdown()

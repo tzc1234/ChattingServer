@@ -17,10 +17,10 @@ struct Payload: JWTPayload {
         case email = "email"
     }
     
-    init(for user: User) throws {
+    init(for user: User, expiration: Date = .now.addingTimeInterval(.accessTokenLifetime)) throws {
         let id = try user.requireID()
         self.subject = SubjectClaim(value: String(id))
-        self.expiration = ExpirationClaim(value: .now.addingTimeInterval(.accessTokenLifetime))
+        self.expiration = ExpirationClaim(value: expiration)
         self.userID = id
         self.email = user.email
     }

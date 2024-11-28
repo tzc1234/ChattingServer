@@ -1,21 +1,23 @@
 import Fluent
 import Vapor
 
-struct AuthenticationController: RouteCollection {
+struct AuthenticationController: RouteCollection, Sendable {
+    private let avatarFilename: @Sendable (String) -> (String)
+    private let avatarDirectoryPath: @Sendable () -> (String)
+    
+    init(avatarFilename: @escaping @Sendable (String) -> String,
+         avatarDirectoryPath: @escaping @Sendable () -> String) {
+        self.avatarFilename = avatarFilename
+        self.avatarDirectoryPath = avatarDirectoryPath
+    }
+    
     func boot(routes: RoutesBuilder) throws {
-        routes.on(.POST, "register", body: .collect(maxSize: "3mb"), use: register)
-        
-        routes.group("login") { loginRoute in
-            loginRoute.post(use: login)
-        }
-        
-        routes.group("refreshToken") { route in
-            route.post(use: refreshToken)
-        }
+        routes.on(.POST, "register", body: .collect(maxSize: "1mb"), use: register)
+        routes.post("login", use: login)
+        routes.post("refreshToken", use: refreshToken)
         
         routes.grouped("me")
-            .grouped(AccessTokenGuardMiddleware())
-            .group(UserAuthenticator()) { route in
+            .group(AccessTokenGuardMiddleware(), UserAuthenticator()) { route in
                 route.get(use: getCurrentUser)
             }
     }
@@ -34,11 +36,18 @@ struct AuthenticationController: RouteCollection {
                 throw Abort(.unsupportedMediaType, reason: "Only accept .jpg, .jpeg, or .png files.")
             }
             
-            let imageFilename = "\(Date().timeIntervalSince1970)_\(filename)"
-            let imageFilePath = req.application.directory.publicDirectory + Constants.AVATARS_DIRECTORY + imageFilename
-            try await req.fileio.writeFile(avatar.data, at: imageFilePath)
+            let avatarFilename = avatarFilename(filename)
+            let directoryPath = avatarDirectoryPath()
+            if !FileManager.default.fileExists(atPath: directoryPath) {
+                try FileManager.default.createDirectory(
+                    atPath: directoryPath,
+                    withIntermediateDirectories: true,
+                    attributes: nil
+                )
+            }
+            try await req.fileio.writeFile(avatar.data, at: directoryPath + avatarFilename)
             
-            savedAvatarFilename = imageFilename
+            savedAvatarFilename = avatarFilename
         }
         
         let user = request.toModel()
@@ -91,7 +100,7 @@ struct AuthenticationController: RouteCollection {
     private func newTokenResponse(for user: User, req: Request) async throws -> TokenResponse {
         let (accessToken, refreshToken) = try await newTokens(for: user, req: req)
         return TokenResponse(
-            user: user.toResponse(app: req.application),
+            user: user.toResponse(app: req.application, avatarDirectoryPath: avatarDirectoryPath()),
             accessToken: accessToken,
             refreshToken: refreshToken
         )
@@ -115,6 +124,6 @@ struct AuthenticationController: RouteCollection {
             throw AuthenticationError.userNotFound
         }
         
-        return user.toResponse(app: req.application)
+        return user.toResponse(app: req.application, avatarDirectoryPath: avatarDirectoryPath())
     }
 }

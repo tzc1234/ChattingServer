@@ -123,7 +123,11 @@ private extension Contact {
     func toResponse(currentUserID: Int, req: Request) async throws -> ContactResponse {
         try ContactResponse(
             id: requireID(),
-            responder: await loadResponder(currentUserID: currentUserID, on: req.db).toResponse(app: req.application),
+            responder: await loadResponder(currentUserID: currentUserID, on: req.db)
+                .toResponse(
+                    app: req.application,
+                    avatarDirectoryPath: req.application.directory.publicDirectory + Constants.AVATARS_DIRECTORY
+                ),
             blockedByUserID: $blockedBy.id,
             unreadMessageCount: await unreadMessagesCount(db: req.db)
         )
