@@ -5,7 +5,7 @@ import Fluent
 import Vapor
 
 @Suite("Authentication routes tests")
-struct AuthenticationTests: AppTests {
+struct AuthenticationTests: AppTests, AvatarFileHelpers {
     @Test("register user failure with a short name")
     func registerUserWithShortName() async throws {
         let shortName = "a"
@@ -88,7 +88,7 @@ struct AuthenticationTests: AppTests {
     @Test("register user success")
     func registerUserSuccess() async throws {
         try await makeApp { app in
-            let smallEnoughAvatar = try smallImageFile(app)
+            let smallEnoughAvatar = try avatarFile(app)
             let registerRequest = makeRegisterRequest(avatar: smallEnoughAvatar)
             
             try await app.testable(method: .running).test(.POST, .apiPath("register"), beforeRequest: { req in
@@ -101,7 +101,7 @@ struct AuthenticationTests: AppTests {
                 #expect(token.user.avatarURL == uploadedAvatarLink(app: app))
             })
         } afterShutdown: {
-            try removeUploadedAvatar()
+            try removeUploadedAvatar(filename: testAvatarFileName)
         }
     }
     
@@ -306,46 +306,19 @@ struct AuthenticationTests: AppTests {
         RegisterRequest(name: name, email: email, password: password, avatar: avatar)
     }
     
-    private func removeUploadedAvatar() throws {
-        let path = testAvatarDirectoryPath + testAvatarFileName
-        guard FileManager.default.fileExists(atPath: path) else { return }
-            
-        try FileManager.default.removeItem(atPath: path)
-    }
-    
     private func uploadedAvatarLink(app: Application) -> String {
         let baseURL = app.http.server.configuration.hostname
         let port = app.http.server.configuration.port
         return "http://\(baseURL):\(port)/\(testAvatarDirectory)/\(testAvatarFileName)"
     }
     
-    private var testAvatarDirectoryPath: String {
-        let components = URL.temporaryDirectory.appending(component: testAvatarDirectory).absoluteString.pathComponents
-        let directoryPath = components.dropFirst().map(\.description).joined(separator: "/")
-        return "/\(directoryPath)/"
-    }
-    
     private var testAvatarFileName: String {
         "test_avatar.png"
-    }
-    
-    private var testAvatarDirectory: String {
-        "uploaded_avatars"
-    }
-    
-    private func smallImageFile(_ app: Application) throws -> File {
-        let fileURL = URL(fileURLWithPath: testResourceDirectory(app) + "small_avatar.png")
-        let fileData = try Data(contentsOf: fileURL)
-        return File(data: .init(data: fileData), filename: "small_avatar.png")
     }
     
     private func largeImageFile(_ app: Application) throws -> File {
         let fileURL = URL(fileURLWithPath: testResourceDirectory(app) + "more_than_2mb.jpg")
         let fileData = try Data(contentsOf: fileURL)
         return File(data: .init(data: fileData), filename: "more_than_2mb.jpg")
-    }
-    
-    private func testResourceDirectory(_ app: Application) -> String {
-        app.directory.workingDirectory + "Tests/AppTests/Resources/"
     }
 }

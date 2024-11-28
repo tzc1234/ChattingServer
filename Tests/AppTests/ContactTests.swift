@@ -5,7 +5,7 @@ import Fluent
 import Vapor
 
 @Suite("Contact routes tests")
-struct ContactTests: AppTests {
+struct ContactTests: AppTests, AvatarFileHelpers {
     @Test("new contact failure without token")
     func newContactFailureWithoutToken() async throws {
         try await makeApp { app in
@@ -140,36 +140,6 @@ struct ContactTests: AppTests {
             test,
             afterShutdown: afterShutdown
         )
-    }
-    
-    private func removeUploadedAvatar(filename: String) throws {
-        let path = testAvatarDirectoryPath + filename
-        guard FileManager.default.fileExists(atPath: path) else { return }
-            
-        try FileManager.default.removeItem(atPath: path)
-    }
-    
-    private var testAvatarDirectoryPath: String {
-        let components = URL.temporaryDirectory
-            .appending(component: testAvatarDirectory)
-            .absoluteString
-            .pathComponents
-        let directoryPath = components.dropFirst().map(\.description).joined(separator: "/")
-        return "/\(directoryPath)/"
-    }
-    
-    private var testAvatarDirectory: String {
-        "uploaded_avatars"
-    }
-    
-    private func avatarFile(_ app: Application) throws -> File {
-        let fileURL = URL(fileURLWithPath: testResourceDirectory(app) + "small_avatar.png")
-        let fileData = try Data(contentsOf: fileURL)
-        return File(data: .init(data: fileData), filename: "small_avatar.png")
-    }
-    
-    private func testResourceDirectory(_ app: Application) -> String {
-        app.directory.workingDirectory + "Tests/AppTests/Resources/"
     }
     
     private func expect(contact: ContactResponse,
