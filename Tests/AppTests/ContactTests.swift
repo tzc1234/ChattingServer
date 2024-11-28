@@ -165,6 +165,29 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
+    @Test("get one contact")
+    func getOneContact() async throws {
+        try await makeApp { app in
+            let currentUserToken = try await createUserForTokenResponse(app)
+            let currentUser = try #require(try await User.find(currentUserToken.user.id!, on: app.db))
+            let anotherUser = try await createUser(app, email: "another@email.com")
+            let expectedContactResponse = try await createContactResponse(
+                user: currentUser,
+                anotherUser: anotherUser,
+                app: app
+            )
+            
+            try await app.test(.GET, .apiPath("contacts")) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
+            } afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                
+                let contactsResponse = try res.content.decode(ContactsResponse.self)
+                #expect(contactsResponse.contacts == [expectedContactResponse])
+            }
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(avatarFilename: String = "filename.png",
@@ -188,6 +211,38 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         #expect(contact.responder.avatarURL == responder.avatarURL, sourceLocation: sourceLocation)
         #expect(contact.blockedByUserID == nil, sourceLocation: sourceLocation)
         #expect(contact.unreadMessageCount == 0, sourceLocation: sourceLocation)
+    }
+    
+    private func createUser(_ app: Application,
+                            name: String = "a username",
+                            email: String = "a@email.com",
+                            password: String = "aPassword") async throws -> User {
+        let user = User(name: name, email: email, password: password)
+        try await user.save(on: app.db)
+        return user
+    }
+    
+    private func createContactResponses(userPairs: [(user: User, anotherUser: User)],
+                                        app: Application) async throws -> [ContactResponse] {
+        var contacts = [ContactResponse]()
+        for pair in userPairs {
+            contacts.append(try await createContactResponse(user: pair.user, anotherUser: pair.anotherUser, app: app))
+        }
+        return contacts
+    }
+    
+    private func createContactResponse(user: User,
+                                       anotherUser: User,
+                                       app: Application) async throws -> ContactResponse {
+        let contact = try Contact(userID1: user.requireID(), userID2: anotherUser.requireID())
+        try await contact.create(on: app.db)
+        
+        return ContactResponse(
+            id: contact.id!,
+            responder: anotherUser.toResponse(app: app, avatarDirectoryPath: testAvatarDirectoryPath),
+            blockedByUserID: nil,
+            unreadMessageCount: 0
+        )
     }
     
     private func createUserForTokenResponse(_ app: Application,
