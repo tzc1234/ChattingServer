@@ -101,7 +101,7 @@ struct AuthenticationTests: AppTests {
                 #expect(token.user.avatarURL == uploadedAvatarLink(app: app))
             })
         } afterShutdown: {
-            try removeUploadedAvatars()
+            try removeUploadedAvatar()
         }
     }
     
@@ -306,8 +306,8 @@ struct AuthenticationTests: AppTests {
         RegisterRequest(name: name, email: email, password: password, avatar: avatar)
     }
     
-    private func removeUploadedAvatars() throws {
-        let path = testAvatarDirectoryPath
+    private func removeUploadedAvatar() throws {
+        let path = testAvatarDirectoryPath + testAvatarFileName
         guard FileManager.default.fileExists(atPath: path) else { return }
             
         try FileManager.default.removeItem(atPath: path)

@@ -2,6 +2,12 @@ import Fluent
 import Vapor
 
 struct ContactController: RouteCollection {
+    private let avatarDirectoryPath: @Sendable () -> (String)
+    
+    init(avatarDirectoryPath: @escaping @Sendable () -> String) {
+        self.avatarDirectoryPath = avatarDirectoryPath
+    }
+    
     func boot(routes: RoutesBuilder) throws {
         let protected = routes.grouped("contacts")
             .grouped(AccessTokenGuardMiddleware(), UserAuthenticator())
@@ -58,7 +64,11 @@ struct ContactController: RouteCollection {
             .filter(by: currentUserID)
             .with(\.$blockedBy)
             .all()
-            .toResponse(currentUserID: currentUserID, req: req)
+            .toResponse(
+                currentUserID: currentUserID,
+                req: req,
+                avatarDirectoryPath: avatarDirectoryPath()
+            )
     }
     
     @Sendable
@@ -77,7 +87,11 @@ struct ContactController: RouteCollection {
         contact.$blockedBy.id = currentUserID
         try await contact.update(on: req.db)
         
-        return try await contact.toResponse(currentUserID: currentUserID, req: req)
+        return try await contact.toResponse(
+            currentUserID: currentUserID,
+            req: req,
+            avatarDirectoryPath: avatarDirectoryPath()
+        )
     }
     
     @Sendable func unblock(req: Request) async throws -> ContactResponse {
@@ -99,7 +113,11 @@ struct ContactController: RouteCollection {
         contact.$blockedBy.id = nil
         try await contact.update(on: req.db)
         
-        return try await contact.toResponse(currentUserID: currentUserID, req: req)
+        return try await contact.toResponse(
+            currentUserID: currentUserID,
+            req: req,
+            avatarDirectoryPath: avatarDirectoryPath()
+        )
     }
     
     private func extractContactID(from parameters: Parameters) throws -> Int {
@@ -120,13 +138,13 @@ struct ContactController: RouteCollection {
 }
 
 private extension Contact {
-    func toResponse(currentUserID: Int, req: Request) async throws -> ContactResponse {
+    func toResponse(currentUserID: Int, req: Request, avatarDirectoryPath: String) async throws -> ContactResponse {
         try ContactResponse(
             id: requireID(),
             responder: await loadResponder(currentUserID: currentUserID, on: req.db)
                 .toResponse(
                     app: req.application,
-                    avatarDirectoryPath: req.application.directory.publicDirectory + Constants.AVATARS_DIRECTORY
+                    avatarDirectoryPath: avatarDirectoryPath
                 ),
             blockedByUserID: $blockedBy.id,
             unreadMessageCount: await unreadMessagesCount(db: req.db)
@@ -143,10 +161,14 @@ private extension Contact {
 }
 
 private extension [Contact] {
-    func toResponse(currentUserID: Int, req: Request) async throws -> ContactsResponse {
+    func toResponse(currentUserID: Int, req: Request, avatarDirectoryPath: String) async throws -> ContactsResponse {
         var contactResponses = [ContactResponse]()
         for contact in self {
-            contactResponses.append(try await contact.toResponse(currentUserID: currentUserID, req: req))
+            contactResponses.append(try await contact.toResponse(
+                currentUserID: currentUserID,
+                req: req,
+                avatarDirectoryPath: avatarDirectoryPath
+            ))
         }
         return ContactsResponse(contacts: contactResponses)
     }

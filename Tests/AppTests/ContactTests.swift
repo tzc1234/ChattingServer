@@ -62,32 +62,133 @@ struct ContactTests: AppTests {
         }
     }
     
+    @Test("new contact success with currentUserID < responderID")
+    func mewContactSuccessWithCurrentUserIDSmallerThanResponderID() async throws {
+        let avatarFilename = "test-avatar.png"
+        try await makeApp(avatarFilename: avatarFilename) { app in
+            let currentUserToken = try await createUserForTokenResponse(app)
+            let responderToken = try await createUserForTokenResponse(
+                app,
+                email: "responder@email.com",
+                avatar: avatarFile(app)
+            )
+            let contactRequest = ContactRequest(responderEmail: responderToken.user.email)
+            
+            try #require(currentUserToken.user.id! < responderToken.user.id!)
+            try #require(responderToken.user.avatarURL != nil)
+            
+            try await app.test(.POST, .apiPath("contacts")) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
+                try req.content.encode(contactRequest)
+            } afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                
+                let response = try res.content.decode(ContactsResponse.self)
+                let contacts = response.contacts
+                #expect(contacts.count == 1)
+                
+                let contact = try #require(contacts.first)
+                expect(contact: contact, as: responderToken.user)
+            }
+        } afterShutdown: {
+            try removeUploadedAvatar(filename: avatarFilename)
+        }
+    }
+    
+    @Test("new contact success with currentUserID > responderID")
+    func mewContactSuccessWithCurrentUserIDBiggerThanResponderID() async throws {
+        let avatarFilename = "test-avatar2.png"
+        try await makeApp(avatarFilename: avatarFilename) { app in
+            let responderToken = try await createUserForTokenResponse(
+                app,
+                email: "responder@email.com",
+                avatar: avatarFile(app)
+            )
+            let currentUserToken = try await createUserForTokenResponse(app)
+            let contactRequest = ContactRequest(responderEmail: responderToken.user.email)
+            
+            try #require(currentUserToken.user.id! > responderToken.user.id!)
+            try #require(responderToken.user.avatarURL != nil)
+            
+            try await app.test(.POST, .apiPath("contacts")) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
+                try req.content.encode(contactRequest)
+            } afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                
+                let response = try res.content.decode(ContactsResponse.self)
+                let contacts = response.contacts
+                #expect(contacts.count == 1)
+                
+                let contact = try #require(contacts.first)
+                expect(contact: contact, as: responderToken.user)
+            }
+        } afterShutdown: {
+            try removeUploadedAvatar(filename: avatarFilename)
+        }
+    }
+    
     // MARK: - Helpers
     
-    private func makeApp(_ test: (Application) async throws -> ()) async throws {
+    private func makeApp(avatarFilename: String = "filename.png",
+                         _ test: (Application) async throws -> (),
+                         afterShutdown: () throws -> Void = {}) async throws {
         try await withApp(
-            avatarFilename: { _ in "any-avatar-name" },
-            avatarDirectoryPath: { "/any-path/" },
+            avatarFilename: { _ in avatarFilename },
+            avatarDirectoryPath: { testAvatarDirectoryPath },
             webSocketStore: WebSocketStore(),
             test,
-            afterShutdown: {}
+            afterShutdown: afterShutdown
         )
     }
-          
-    private func createUser(_ app: Application,
-                            name: String = "a username",
-                            email: String = "a@email.com",
-                            password: String = "aPassword") async throws -> User {
-        let user = User(name: name, email: email, password: password)
-        try await user.save(on: app.db)
-        return user
+    
+    private func removeUploadedAvatar(filename: String) throws {
+        let path = testAvatarDirectoryPath + filename
+        guard FileManager.default.fileExists(atPath: path) else { return }
+            
+        try FileManager.default.removeItem(atPath: path)
+    }
+    
+    private var testAvatarDirectoryPath: String {
+        let components = URL.temporaryDirectory
+            .appending(component: testAvatarDirectory)
+            .absoluteString
+            .pathComponents
+        let directoryPath = components.dropFirst().map(\.description).joined(separator: "/")
+        return "/\(directoryPath)/"
+    }
+    
+    private var testAvatarDirectory: String {
+        "uploaded_avatars"
+    }
+    
+    private func avatarFile(_ app: Application) throws -> File {
+        let fileURL = URL(fileURLWithPath: testResourceDirectory(app) + "small_avatar.png")
+        let fileData = try Data(contentsOf: fileURL)
+        return File(data: .init(data: fileData), filename: "small_avatar.png")
+    }
+    
+    private func testResourceDirectory(_ app: Application) -> String {
+        app.directory.workingDirectory + "Tests/AppTests/Resources/"
+    }
+    
+    private func expect(contact: ContactResponse,
+                        as responder: UserResponse,
+                        sourceLocation: SourceLocation = #_sourceLocation) {
+        #expect(contact.responder.email == responder.email, sourceLocation: sourceLocation)
+        #expect(contact.responder.name == responder.name, sourceLocation: sourceLocation)
+        #expect(contact.responder.id == responder.id, sourceLocation: sourceLocation)
+        #expect(contact.responder.avatarURL == responder.avatarURL, sourceLocation: sourceLocation)
+        #expect(contact.blockedByUserID == nil, sourceLocation: sourceLocation)
+        #expect(contact.unreadMessageCount == 0, sourceLocation: sourceLocation)
     }
     
     private func createUserForTokenResponse(_ app: Application,
                                             name: String = "a username",
                                             email: String = "a@email.com",
-                                            password: String = "aPassword") async throws -> TokenResponse {
-        let registerRequest = RegisterRequest(name: name, email: email, password: password, avatar: nil)
+                                            password: String = "aPassword",
+                                            avatar: File? = nil) async throws -> TokenResponse {
+        let registerRequest = RegisterRequest(name: name, email: email, password: password, avatar: avatar)
         var tokenResponse: TokenResponse?
         
         try await app.test(.POST, .apiPath("register"), beforeRequest: { req in

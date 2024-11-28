@@ -14,7 +14,7 @@ func routes(_ app: Application,
             avatarFilename: avatarFilename,
             avatarDirectoryPath: avatarDirectoryPath)
         )
-        try routes.register(collection: ContactController())
+        try routes.register(collection: ContactController(avatarDirectoryPath: avatarDirectoryPath))
         try routes.register(collection: MessageController(webSocketStore: webSocketStore))
     }
 }
