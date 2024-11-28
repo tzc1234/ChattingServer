@@ -44,6 +44,24 @@ struct ContactTests: AppTests {
         }
     }
     
+    @Test("new contact failure with responder is as same as current user")
+    func mewContactFailureWithResponderSameAsCurrentUser() async throws {
+        try await makeApp { app in
+            let token = try await createUserForTokenResponse(app)
+            let currentUserEmail = token.user.email
+            let contactRequest = ContactRequest(responderEmail: currentUserEmail)
+            
+            try await app.test(.POST, .apiPath("contacts")) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: token.accessToken)
+                try req.content.encode(contactRequest)
+            } afterResponse: { res async throws in
+                #expect(res.status == .conflict)
+                let error = try res.content.decode(ErrorResponse.self)
+                #expect(error.reason == "Responder cannot be the same as current user")
+            }
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(_ test: (Application) async throws -> ()) async throws {
