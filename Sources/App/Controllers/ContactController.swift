@@ -2,6 +2,7 @@ import Fluent
 import Vapor
 
 struct ContactController: RouteCollection {
+    private var defaultLimit: Int { 20 }
     private let avatarDirectoryPath: @Sendable () -> (String)
     
     init(avatarDirectoryPath: @escaping @Sendable () -> String) {
@@ -23,8 +24,15 @@ struct ContactController: RouteCollection {
     
     @Sendable
     private func index(req: Request) async throws -> ContactsResponse {
+        let indexRequest = try req.content.decode(ContactIndexRequest.self)
         let currentUserID = try req.auth.require(Payload.self).userID
-        return try await getContactsResponse(for: currentUserID, req: req)
+        return try await getContactsResponse(
+            for: currentUserID,
+            beforeContactID: indexRequest.beforeContactID,
+            afterContactID: indexRequest.afterContactID,
+            limit: indexRequest.limit,
+            req: req
+        )
     }
     
     @Sendable
@@ -59,11 +67,24 @@ struct ContactController: RouteCollection {
         try await contact.save(on: db)
     }
     
-    private func getContactsResponse(for currentUserID: Int, req: Request) async throws -> ContactsResponse {
-        return try await Contact.query(on: req.db)
+    private func getContactsResponse(for currentUserID: Int,
+                                     beforeContactID: Int? = nil,
+                                     afterContactID: Int? = nil,
+                                     limit: Int? = nil,
+                                     req: Request) async throws -> ContactsResponse {
+        var query = Contact.query(on: req.db)
             .filter(by: currentUserID)
             .with(\.$blockedBy)
-            .all()
+            .sort(\.$id, .descending)
+            .limit(limit ?? defaultLimit)
+        
+        if let beforeContactID {
+            query = query.filter(\.$id < beforeContactID)
+        } else if let afterContactID {
+            query = query.filter(\.$id > afterContactID)
+        }
+        
+        return try await query.all()
             .toResponse(
                 currentUserID: currentUserID,
                 req: req,

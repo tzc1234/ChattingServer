@@ -157,6 +157,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             
             try await app.test(.GET, .apiPath("contacts")) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
+                try req.content.encode(ContactIndexRequest(beforeContactID: nil, afterContactID: nil, limit: nil))
             } afterResponse: { res async throws in
                 #expect(res.status == .ok)
                 let contactsResponse = try res.content.decode(ContactsResponse.self)
@@ -179,11 +180,51 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             
             try await app.test(.GET, .apiPath("contacts")) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
+                try req.content.encode(ContactIndexRequest(beforeContactID: nil, afterContactID: nil, limit: nil))
             } afterResponse: { res async throws in
                 #expect(res.status == .ok)
                 
                 let contactsResponse = try res.content.decode(ContactsResponse.self)
                 #expect(contactsResponse.contacts == [expectedContactResponse])
+            }
+        }
+    }
+    
+    @Test("get multiple contacts before a contact ID")
+    func getMultipleContactsBeforeContactID() async throws {
+        try await makeApp { app in
+            let currentUserToken = try await createUserForTokenResponse(app)
+            let currentUser = try #require(try await User.find(currentUserToken.user.id!, on: app.db))
+            let anotherUser1 = try await createUser(app, email: "another-user1@email.com")
+            let anotherUser2 = try await createUser(app, email: "another-user2@email.com")
+            let anotherUser3 = try await createUser(app, email: "another-user3@email.com")
+            let anotherUser4 = try await createUser(app, email: "another-user4@email.com")
+            let anotherUser5 = try await createUser(app, email: "another-user5@email.com")
+            
+            let contactResponses = try await createContactResponses(
+                userPairs: [
+                    (currentUser, anotherUser1), // contactID: 1
+                    (currentUser, anotherUser2), // contactID: 2
+                    (currentUser, anotherUser3), // contactID: 3
+                    (currentUser, anotherUser4), // contactID: 4
+                    (currentUser, anotherUser5), // contactID: 5
+                ],
+                app: app
+            )
+            let beforeContactID = 5
+            let limit = 3
+            let expectedContactResponses = Array(contactResponses
+                .filter({ $0.id < beforeContactID })
+                .sorted(by: { $0.id > $1.id })[..<limit])
+            
+            try await app.test(.GET, .apiPath("contacts")) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
+                try req.content.encode(ContactIndexRequest(beforeContactID: beforeContactID, afterContactID: nil, limit: limit))
+            } afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                
+                let contactsResponse = try res.content.decode(ContactsResponse.self)
+                #expect(contactsResponse.contacts == expectedContactResponses)
             }
         }
     }
