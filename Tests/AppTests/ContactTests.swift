@@ -17,7 +17,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
     
     @Test("new contact failure with invalid token")
     func newContactFailureWithInvalidToken() async throws {
-        let invalidToken = "invalid-valid-token"
+        let invalidToken = "invalid-token"
         
         try await makeApp { app in
             try await app.test(.POST, .apiPath("contacts")) { req in
@@ -131,7 +131,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
     
     @Test("get contacts failure with an invalid token")
     func getContactsFailureWithInvalidToken() async throws {
-        let invalidToken = "invalid-valid-token"
+        let invalidToken = "invalid-token"
         
         try await makeApp { app in
             try await app.test(.GET, .apiPath("contacts")) { req in
@@ -268,11 +268,23 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
-    @Test("block contact failure without token")
     @Test("block contact failure without a token")
     func blockContactFailureWithoutToken() async throws {
         try await makeApp { app in
             try await app.test(.PATCH, .apiPath("contacts", ":contact_id", "block")) { res async throws in
+                #expect(res.status == .unauthorized)
+            }
+        }
+    }
+    
+    @Test("block contact failure with an invalid token")
+    func blockContactFailureWithInvalidToken() async throws {
+        let invalidToken = "invalid-token"
+        
+        try await makeApp { app in
+            try await app.test(.PATCH, .apiPath("contacts", ":contact_id", "block")) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: invalidToken)
+            } afterResponse: { res async throws in
                 #expect(res.status == .unauthorized)
             }
         }
