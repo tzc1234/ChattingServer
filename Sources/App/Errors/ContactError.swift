@@ -43,7 +43,7 @@ enum ContactError: AbortError, DebuggableError {
         case .contactIsNotBlocked:
             "Contact is not blocked"
         case .contactIsNotBlockedByCurrentUser:
-            "Contact is not blocked by current user"
+            "Contact is not blocked by current user, cannot be unblocked"
         }
     }
     
