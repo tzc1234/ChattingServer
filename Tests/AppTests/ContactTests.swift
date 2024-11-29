@@ -388,6 +388,24 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
+    @Test("unblock contact failure with an unblocked contact")
+    func unblockContactFailureWithUnblockedContact() async throws {
+        try await makeApp { app in
+            let currentUserToken = try await createUserForTokenResponse(app)
+            let currentUser = try #require(try await User.find(currentUserToken.user.id!, on: app.db))
+            let anotherUser = try await createUser(app, email: "another@email.com")
+            let unBlockedContact = try await createContact(user: currentUser, anotherUser: anotherUser, app: app)
+            
+            try await app.test(.PATCH, .apiPath("contacts", "\(unBlockedContact.requireID())", "unblock")) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
+            } afterResponse: { res async throws in
+                #expect(res.status == .badRequest)
+                let error = try res.content.decode(ErrorResponse.self)
+                #expect(error.reason == "Contact is not blocked")
+            }
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(avatarFilename: String = "filename.png",
