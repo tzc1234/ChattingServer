@@ -314,7 +314,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             let alreadyBlockedContact = try await createContact(
                 user: currentUser,
                 anotherUser: anotherUser,
-                blockedByUserID: currentUser.requireID(),
+                blockedByUserID: anotherUser.requireID(),
                 app: app
             )
             
@@ -324,6 +324,29 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 #expect(res.status == .badRequest)
                 let error = try res.content.decode(ErrorResponse.self)
                 #expect(error.reason == "Contact is already blocked")
+            }
+        }
+    }
+    
+    @Test("block contact success")
+    func blockContactSuccess() async throws {
+        try await makeApp { app in
+            let currentUserToken = try await createUserForTokenResponse(app)
+            let currentUser = try #require(try await User.find(currentUserToken.user.id!, on: app.db))
+            let anotherUser = try await createUser(app, email: "another@email.com")
+            let contact = try await createContact(user: currentUser, anotherUser: anotherUser, app: app)
+            
+            try await app.test(.PATCH, .apiPath("contacts", "\(contact.requireID())", "block")) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
+            } afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                
+                let contactResponse = try res.content.decode(ContactResponse.self)
+                expect(
+                    contact: contactResponse,
+                    as: anotherUser.toResponse(app: app, avatarDirectoryPath: testAvatarDirectoryPath),
+                    blockedByUserID: try currentUser.requireID()
+                )
             }
         }
     }
@@ -344,12 +367,13 @@ struct ContactTests: AppTests, AvatarFileHelpers {
     
     private func expect(contact: ContactResponse,
                         as responder: UserResponse,
+                        blockedByUserID: Int? = nil,
                         sourceLocation: SourceLocation = #_sourceLocation) {
         #expect(contact.responder.email == responder.email, sourceLocation: sourceLocation)
         #expect(contact.responder.name == responder.name, sourceLocation: sourceLocation)
         #expect(contact.responder.id == responder.id, sourceLocation: sourceLocation)
         #expect(contact.responder.avatarURL == responder.avatarURL, sourceLocation: sourceLocation)
-        #expect(contact.blockedByUserID == nil, sourceLocation: sourceLocation)
+        #expect(contact.blockedByUserID == blockedByUserID, sourceLocation: sourceLocation)
         #expect(contact.unreadMessageCount == 0, sourceLocation: sourceLocation)
     }
     
