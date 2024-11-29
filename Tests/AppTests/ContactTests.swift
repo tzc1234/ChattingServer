@@ -412,19 +412,52 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             let currentUserToken = try await createUserForTokenResponse(app)
             let currentUser = try #require(try await User.find(currentUserToken.user.id!, on: app.db))
             let anotherUser = try await createUser(app, email: "another@email.com")
-            let contact = try await createContact(
+            let blockedContactByAnotherUser = try await createContact(
                 user: currentUser,
                 anotherUser: anotherUser,
                 blockedByUserID: anotherUser.requireID(),
                 app: app
             )
             
-            try await app.test(.PATCH, .apiPath("contacts", "\(contact.requireID())", "unblock")) { req in
+            try await app.test(
+                .PATCH,
+                .apiPath("contacts", "\(blockedContactByAnotherUser.requireID())", "unblock")
+            ) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
             } afterResponse: { res async throws in
                 #expect(res.status == .badRequest)
                 let error = try res.content.decode(ErrorResponse.self)
                 #expect(error.reason == "Contact is not blocked by current user, cannot be unblocked")
+            }
+        }
+    }
+    
+    @Test("unblock contact success")
+    func unblockContactSuccess() async throws {
+        try await makeApp { app in
+            let currentUserToken = try await createUserForTokenResponse(app)
+            let currentUser = try #require(try await User.find(currentUserToken.user.id!, on: app.db))
+            let anotherUser = try await createUser(app, email: "another@email.com")
+            let blockedContactByCurrentUser = try await createContact(
+                user: currentUser,
+                anotherUser: anotherUser,
+                blockedByUserID: currentUser.requireID(),
+                app: app
+            )
+            
+            try await app.test(
+                .PATCH,
+                .apiPath("contacts", "\(blockedContactByCurrentUser.requireID())", "unblock")
+            ) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
+            } afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                
+                let contactResponse = try res.content.decode(ContactResponse.self)
+                expect(
+                    contact: contactResponse,
+                    as: anotherUser.toResponse(app: app, avatarDirectoryPath: testAvatarDirectoryPath)
+                )
             }
         }
     }
