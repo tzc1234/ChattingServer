@@ -305,6 +305,29 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
+    @Test("block contact failure because is already blocked")
+    func blockContactFailureBecauseAlreadyBlocked() async throws {
+        try await makeApp { app in
+            let currentUserToken = try await createUserForTokenResponse(app)
+            let currentUser = try #require(try await User.find(currentUserToken.user.id!, on: app.db))
+            let anotherUser = try await createUser(app, email: "another@email.com")
+            let alreadyBlockedContact = try await createContact(
+                user: currentUser,
+                anotherUser: anotherUser,
+                blockedByUserID: currentUser.requireID(),
+                app: app
+            )
+            
+            try await app.test(.PATCH, .apiPath("contacts", "\(alreadyBlockedContact.requireID())", "block")) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
+            } afterResponse: { res async throws in
+                #expect(res.status == .badRequest)
+                let error = try res.content.decode(ErrorResponse.self)
+                #expect(error.reason == "Contact is already blocked")
+            }
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(avatarFilename: String = "filename.png",
@@ -351,15 +374,26 @@ struct ContactTests: AppTests, AvatarFileHelpers {
     private func createContactResponse(user: User,
                                        anotherUser: User,
                                        app: Application) async throws -> ContactResponse {
-        let contact = try Contact(userID1: user.requireID(), userID2: anotherUser.requireID())
-        try await contact.create(on: app.db)
-        
+        let contact = try await createContact(user: user, anotherUser: anotherUser, app: app)
         return ContactResponse(
-            id: contact.id!,
+            id: try contact.requireID(),
             responder: anotherUser.toResponse(app: app, avatarDirectoryPath: testAvatarDirectoryPath),
             blockedByUserID: nil,
             unreadMessageCount: 0
         )
+    }
+    
+    private func createContact(user: User,
+                               anotherUser: User,
+                               blockedByUserID: Int? = nil,
+                               app: Application) async throws -> Contact {
+        let contact = try Contact(
+            userID1: user.requireID(),
+            userID2: anotherUser.requireID(),
+            blockedByUserID: blockedByUserID
+        )
+        try await contact.create(on: app.db)
+        return contact
     }
     
     private func createUserForTokenResponse(_ app: Application,
