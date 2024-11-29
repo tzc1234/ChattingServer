@@ -182,7 +182,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
-    @Test("get multiple contacts before a contact ID")
+    @Test("get multiple contacts before a contactID")
     func getMultipleContactsBeforeContactID() async throws {
         try await makeApp { app in
             let currentUserToken = try await createUserForTokenResponse(app)
@@ -225,7 +225,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
-    @Test("get multiple contacts after a contact ID")
+    @Test("get multiple contacts after a contactID")
     func getMultipleContactsAfterContactID() async throws {
         try await makeApp { app in
             let currentUserToken = try await createUserForTokenResponse(app)
@@ -271,7 +271,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
     @Test("block contact failure without a token")
     func blockContactFailureWithoutToken() async throws {
         try await makeApp { app in
-            try await app.test(.PATCH, .apiPath("contacts", ":contact_id", "block")) { res async throws in
+            try await app.test(.PATCH, .apiPath("contacts", "1", "block")) { res async throws in
                 #expect(res.status == .unauthorized)
             }
         }
@@ -282,10 +282,25 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         let invalidToken = "invalid-token"
         
         try await makeApp { app in
-            try await app.test(.PATCH, .apiPath("contacts", ":contact_id", "block")) { req in
+            try await app.test(.PATCH, .apiPath("contacts", "1", "block")) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: invalidToken)
             } afterResponse: { res async throws in
                 #expect(res.status == .unauthorized)
+            }
+        }
+    }
+    
+    @Test("block contact failure with an non-exist contactID")
+    func blockContactFailureWithNonExistContactID() async throws {
+        try await makeApp { app in
+            let currentUserToken = try await createUserForTokenResponse(app)
+            
+            try await app.test(.PATCH, .apiPath("contacts", "1", "block")) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
+            } afterResponse: { res async throws in
+                #expect(res.status == .notFound)
+                let error = try res.content.decode(ErrorResponse.self)
+                #expect(error.reason == "Contact not found")
             }
         }
     }
