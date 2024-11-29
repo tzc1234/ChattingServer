@@ -268,6 +268,16 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
+    @Test("block contact failure without token")
+    @Test("block contact failure without a token")
+    func blockContactFailureWithoutToken() async throws {
+        try await makeApp { app in
+            try await app.test(.PATCH, .apiPath("contacts", ":contact_id", "block")) { res async throws in
+                #expect(res.status == .unauthorized)
+            }
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(avatarFilename: String = "filename.png",
