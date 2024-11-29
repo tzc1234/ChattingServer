@@ -83,11 +83,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             } afterResponse: { res async throws in
                 #expect(res.status == .ok)
                 
-                let response = try res.content.decode(ContactsResponse.self)
-                let contacts = response.contacts
-                #expect(contacts.count == 1)
-                
-                let contact = try #require(contacts.first)
+                let contact = try res.content.decode(ContactResponse.self)
                 expect(contact: contact, as: responderToken.user)
             }
         } afterShutdown: {
@@ -116,11 +112,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             } afterResponse: { res async throws in
                 #expect(res.status == .ok)
                 
-                let response = try res.content.decode(ContactsResponse.self)
-                let contacts = response.contacts
-                #expect(contacts.count == 1)
-                
-                let contact = try #require(contacts.first)
+                let contact = try res.content.decode(ContactResponse.self)
                 expect(contact: contact, as: responderToken.user)
             }
         } afterShutdown: {

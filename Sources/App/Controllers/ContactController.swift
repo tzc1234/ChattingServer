@@ -36,14 +36,20 @@ struct ContactController: RouteCollection {
     }
     
     @Sendable
-    private func create(req: Request) async throws -> ContactsResponse {
+    private func create(req: Request) async throws -> ContactResponse {
         let currentUserID = try req.auth.require(Payload.self).userID
         let contactRequest = try req.content.decode(ContactRequest.self)
-        try await newContact(for: currentUserID, with: contactRequest.responderEmail, on: req.db)
-        return try await getContactsResponse(for: currentUserID, req: req)
+        let contact = try await newContact(for: currentUserID, with: contactRequest.responderEmail, on: req.db)
+        return try await contact.toResponse(
+            currentUserID: currentUserID,
+            req: req,
+            avatarDirectoryPath: avatarDirectoryPath()
+        )
     }
     
-    private func newContact(for currentUserID: Int, with responderEmail: String, on db: Database) async throws {
+    private func newContact(for currentUserID: Int,
+                            with responderEmail: String,
+                            on db: Database) async throws -> Contact {
         guard let responder = try await User.query(on: db)
             .filter(\.$email == responderEmail)
             .first(), let responderID = try? responder.requireID()
@@ -55,16 +61,19 @@ struct ContactController: RouteCollection {
             throw ContactError.responderSameAsCurrentUser
         }
         
-        try await saveNewContact(with: currentUserID, and: responderID, on: db)
+        return try await saveNewContact(with: currentUserID, and: responderID, on: db)
     }
     
-    private func saveNewContact(with currentUserID: Int, and responderID: Int, on db: Database) async throws {
+    private func saveNewContact(with currentUserID: Int,
+                                and responderID: Int,
+                                on db: Database) async throws -> Contact {
         let contact = if currentUserID < responderID {
             Contact(userID1: currentUserID, userID2: responderID)
         } else {
             Contact(userID1: responderID, userID2: currentUserID)
         }
         try await contact.save(on: db)
+        return contact
     }
     
     private func getContactsResponse(for currentUserID: Int,
