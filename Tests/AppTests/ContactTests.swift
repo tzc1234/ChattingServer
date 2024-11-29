@@ -373,6 +373,21 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
+    @Test("unblock contact failure with an non-exist contactID")
+    func unblockContactFailureWithNonExistContactID() async throws {
+        try await makeApp { app in
+            let currentUserToken = try await createUserForTokenResponse(app)
+            
+            try await app.test(.PATCH, .apiPath("contacts", "1", "unblock")) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
+            } afterResponse: { res async throws in
+                #expect(res.status == .notFound)
+                let error = try res.content.decode(ErrorResponse.self)
+                #expect(error.reason == "Contact not found")
+            }
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(avatarFilename: String = "filename.png",
