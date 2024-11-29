@@ -351,6 +351,28 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
+    @Test("unblock contact failure without a token")
+    func unblockContactFailureWithoutToken() async throws {
+        try await makeApp { app in
+            try await app.test(.PATCH, .apiPath("contacts", "1", "unblock")) { res async throws in
+                #expect(res.status == .unauthorized)
+            }
+        }
+    }
+    
+    @Test("unblock contact failure with an invalid token")
+    func unblockContactFailureWithInvalidToken() async throws {
+        let invalidToken = "invalid-token"
+        
+        try await makeApp { app in
+            try await app.test(.PATCH, .apiPath("contacts", "1", "unblock")) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: invalidToken)
+            } afterResponse: { res async throws in
+                #expect(res.status == .unauthorized)
+            }
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(avatarFilename: String = "filename.png",
