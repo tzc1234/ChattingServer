@@ -1,5 +1,6 @@
 import Fluent
 import Vapor
+import SQLKit
 
 struct ContactController: RouteCollection {
     private var defaultLimit: Int { 20 }
@@ -26,12 +27,58 @@ struct ContactController: RouteCollection {
     private func index(req: Request) async throws -> ContactsResponse {
         let indexRequest = try req.query.decode(ContactIndexRequest.self)
         let currentUserID = try req.auth.require(Payload.self).userID
-        return try await getContactsResponse(
+        return try await contactsResponse(
             for: currentUserID,
-            beforeContactID: indexRequest.beforeContactID,
-            afterContactID: indexRequest.afterContactID,
+            before: indexRequest.before,
             limit: indexRequest.limit,
             req: req
+        )
+    }
+    
+    private func contactsResponse(for currentUserID: Int,
+                                  before: Date? = nil,
+                                  limit: Int? = nil,
+                                  req: Request) async throws -> ContactsResponse {
+        let contactTab = SQLQualifiedTable(Contact.schema, space: Contact.space)
+        let messageTab = SQLQualifiedTable(Message.schema, space: Message.space)
+        let contactIDColumn = SQLColumn(SQLLiteral.string("id"), table: contactTab)
+        let createdAtLiteral = SQLLiteral.string("created_at")
+        let numericCurrentUserID = SQLLiteral.numeric("\(currentUserID)")
+        
+        guard let sql = req.db as? SQLDatabase else {
+            throw ContactError.databaseError
+        }
+        
+        var query = sql.select()
+            .column(SQLColumn(SQLLiteral.all, table: contactTab))
+            .column(
+                SQLFunction(
+                    "ifnull",
+                    args: SQLFunction("max", args: SQLColumn(createdAtLiteral, table: messageTab)),
+                        SQLColumn(createdAtLiteral, table: contactTab)
+                ),
+                as: "updated_at"
+            )
+            .from(contactTab)
+            .join(messageTab, method: SQLJoinMethod.left, on:
+                    contactIDColumn,
+                    .equal,
+                    SQLColumn(SQLLiteral.string("contact_id"), table: messageTab)
+            )
+            .groupBy(contactIDColumn)
+        
+        before.map { query = query.having("updated_at", .lessThan, $0) }
+        
+        query = query.having(SQLColumn(SQLLiteral.string("user_id1"), table: contactTab), .equal, numericCurrentUserID)
+            .orHaving(SQLColumn(SQLLiteral.string("user_id2"), table: contactTab), .equal, numericCurrentUserID)
+            .orderBy("updated_at", .descending)
+            .limit(limit ?? defaultLimit)
+        
+        let contacts = try await query.all().map { try $0.decode(fluentModel: Contact.self) }
+        return try await contacts.toResponse(
+            currentUserID: currentUserID,
+            req: req,
+            avatarDirectoryPath: avatarDirectoryPath()
         )
     }
     
@@ -74,31 +121,6 @@ struct ContactController: RouteCollection {
         }
         try await contact.save(on: db)
         return contact
-    }
-    
-    private func getContactsResponse(for currentUserID: Int,
-                                     beforeContactID: Int? = nil,
-                                     afterContactID: Int? = nil,
-                                     limit: Int? = nil,
-                                     req: Request) async throws -> ContactsResponse {
-        var query = Contact.query(on: req.db)
-            .filter(by: currentUserID)
-            .with(\.$blockedBy)
-            .sort(\.$id, .descending)
-            .limit(limit ?? defaultLimit)
-        
-        if let beforeContactID {
-            query = query.filter(\.$id < beforeContactID)
-        } else if let afterContactID {
-            query = query.filter(\.$id > afterContactID)
-        }
-        
-        return try await query.all()
-            .toResponse(
-                currentUserID: currentUserID,
-                req: req,
-                avatarDirectoryPath: avatarDirectoryPath()
-            )
     }
     
     @Sendable

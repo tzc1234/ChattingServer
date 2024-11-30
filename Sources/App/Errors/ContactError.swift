@@ -8,6 +8,7 @@ enum ContactError: AbortError, DebuggableError {
     case contactAlreadyBlocked
     case contactIsNotBlocked
     case contactIsNotBlockedByCurrentUser
+    case databaseError
     
     var status: HTTPResponseStatus {
         switch self {
@@ -25,6 +26,8 @@ enum ContactError: AbortError, DebuggableError {
             .badRequest
         case .contactIsNotBlockedByCurrentUser:
             .badRequest
+        case .databaseError:
+            .internalServerError
         }
     }
     
@@ -44,6 +47,8 @@ enum ContactError: AbortError, DebuggableError {
             "Contact is not blocked"
         case .contactIsNotBlockedByCurrentUser:
             "Contact is not blocked by current user, cannot be unblocked"
+        case .databaseError:
+            "Database error"
         }
     }
     
@@ -63,6 +68,8 @@ enum ContactError: AbortError, DebuggableError {
             "contact_not_blocked"
         case .contactIsNotBlockedByCurrentUser:
             "contact_not_blocked_by_current_user"
+        case .databaseError:
+            "database_error"
         }
     }
 }
