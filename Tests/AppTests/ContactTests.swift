@@ -211,7 +211,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             
             try await app.test(.GET, .apiPath("contacts")) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
-                try req.content.encode(ContactIndexRequest(
+                try req.query.encode(ContactIndexRequest(
                     beforeContactID: beforeContactID,
                     afterContactID: nil,
                     limit: limit
@@ -254,7 +254,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             
             try await app.test(.GET, .apiPath("contacts")) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
-                try req.content.encode(ContactIndexRequest(
+                try req.query.encode(ContactIndexRequest(
                     beforeContactID: nil,
                     afterContactID: afterContactID,
                     limit: limit

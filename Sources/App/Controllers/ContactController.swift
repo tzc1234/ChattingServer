@@ -24,7 +24,7 @@ struct ContactController: RouteCollection {
     
     @Sendable
     private func index(req: Request) async throws -> ContactsResponse {
-        let indexRequest = try req.content.decode(ContactIndexRequest.self)
+        let indexRequest = try req.query.decode(ContactIndexRequest.self)
         let currentUserID = try req.auth.require(Payload.self).userID
         return try await getContactsResponse(
             for: currentUserID,
@@ -177,7 +177,7 @@ private extension Contact {
                     avatarDirectoryPath: avatarDirectoryPath
                 ),
             blockedByUserID: $blockedBy.id,
-            unreadMessageCount: await unreadMessagesCount(db: req.db)
+            unreadMessageCount: await unreadMessagesCount(currentUserID: currentUserID, db: req.db)
         )
     }
     
