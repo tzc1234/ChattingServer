@@ -590,9 +590,3 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         let messageDetails: [MessageDetail]
     }
 }
-
-extension Date {
-    func adding(seconds: TimeInterval) -> Date {
-        self + seconds
-    }
-}
