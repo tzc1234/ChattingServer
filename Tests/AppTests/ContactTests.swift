@@ -158,30 +158,30 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
-//    @Test("get one contact")
-//    func getOneContact() async throws {
-//        try await makeApp { app in
-//            let currentUserToken = try await createUserForTokenResponse(app)
-//            let currentUser = try #require(try await User.find(currentUserToken.user.id!, on: app.db))
-//            let anotherUser = try await createUser(app, email: "another@email.com")
-//            let expectedContactResponse = try await createContactResponse(
-//                user: currentUser,
-//                anotherUser: anotherUser,
-//                app: app
-//            )
-//            
-//            try await app.test(.GET, .apiPath("contacts")) { req in
-//                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
-//                try req.content.encode(ContactIndexRequest(beforeContactID: nil, afterContactID: nil, limit: nil))
-//            } afterResponse: { res async throws in
-//                #expect(res.status == .ok)
-//                
-//                let contactsResponse = try res.content.decode(ContactsResponse.self)
-//                #expect(contactsResponse.contacts == [expectedContactResponse])
-//            }
-//        }
-//    }
-//    
+    @Test("get one contact")
+    func getOneContact() async throws {
+        try await makeApp { app in
+            let currentUserToken = try await createUserForTokenResponse(app)
+            let currentUser = try #require(try await User.find(currentUserToken.user.id!, on: app.db))
+            let anotherUser = try await createUser(app, email: "another@email.com")
+            let expectedContactResponse = try await createContactResponse(
+                user: currentUser,
+                anotherUser: anotherUser,
+                app: app
+            )
+            
+            try await app.test(.GET, .apiPath("contacts")) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
+                try req.content.encode(ContactIndexRequest(before: nil, limit: nil))
+            } afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                
+                let contactsResponse = try res.content.decode(ContactsResponse.self)
+                expect(contacts: contactsResponse.contacts, as: [expectedContactResponse])
+            }
+        }
+    }
+    
 //    @Test("get multiple contacts before a contactID")
 //    func getMultipleContactsBeforeContactID() async throws {
 //        try await makeApp { app in
@@ -476,6 +476,34 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         )
     }
     
+    private func expect(contacts: [ContactResponse],
+                        as expected: [ContactResponse],
+                        sourceLocation: SourceLocation = #_sourceLocation) {
+        guard contacts.count == expected.count else {
+            Issue.record("Contact count not equal", sourceLocation: sourceLocation)
+            return
+        }
+        
+        contacts.enumerated().forEach { index, contact in
+            expect(contact: contact, as: expected[index], sourceLocation: sourceLocation)
+        }
+    }
+    
+    private func expect(contact: ContactResponse,
+                        as expected: ContactResponse,
+                        sourceLocation: SourceLocation = #_sourceLocation) {
+        #expect(contact.responder.email == expected.responder.email, sourceLocation: sourceLocation)
+        #expect(contact.responder.name == expected.responder.name, sourceLocation: sourceLocation)
+        #expect(contact.responder.id == expected.responder.id, sourceLocation: sourceLocation)
+        #expect(contact.responder.avatarURL == expected.responder.avatarURL, sourceLocation: sourceLocation)
+        #expect(contact.blockedByUserID == expected.blockedByUserID, sourceLocation: sourceLocation)
+        #expect(contact.unreadMessageCount == expected.unreadMessageCount, sourceLocation: sourceLocation)
+        #expect(
+            Int(contact.lastUpdate.timeIntervalSince1970) == Int(expected.lastUpdate.timeIntervalSince1970),
+            sourceLocation: sourceLocation
+        )
+    }
+    
     private func expect(contact: ContactResponse,
                         as responder: UserResponse,
                         blockedByUserID: Int? = nil,
@@ -505,7 +533,8 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             id: try contact.requireID(),
             responder: anotherUser.toResponse(app: app, avatarDirectoryPath: testAvatarDirectoryPath),
             blockedByUserID: nil,
-            unreadMessageCount: 0
+            unreadMessageCount: 0,
+            lastUpdate: try await contact.lastUpdate(db: app.db)!
         )
     }
     

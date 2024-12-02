@@ -1,6 +1,6 @@
 import Vapor
 
-struct ContactResponse: Content, Equatable {
+struct ContactResponse: Content {
     let id: Int
     let responder: UserResponse
     let blockedByUserID: Int?
