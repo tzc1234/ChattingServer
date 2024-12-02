@@ -182,8 +182,8 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
-    @Test("get contacts before date")
-    func getContactsBeforeDate() async throws {
+    @Test("get contacts with before date")
+    func getContactsWithBeforeDate() async throws {
         try await makeApp { app in
             let currentUserToken = try await createUserForTokenResponse(app)
             let currentUser = try #require(try await User.find(currentUserToken.user.id!, on: app.db))
@@ -193,26 +193,53 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             let anotherUser4 = try await createUser(app, email: "another-user4@email.com")
             
             let beforeDate = Date.now
-            let smallerThanBeforeDateMsgForContact1 = MessageDetail(senderID: try currentUser.requireID(), createdAt: beforeDate - 1)
-            let equalBeforeDateMsgForContact2 = MessageDetail(senderID: try anotherUser2.requireID(), createdAt: beforeDate)
-            let greaterThanBeforeDateMsgForContact3 = MessageDetail(senderID: try anotherUser3.requireID(), createdAt: beforeDate + 1)
-            let smallerThanBeforeDateMsgForContact4 = MessageDetail(senderID: try anotherUser4.requireID(), createdAt: beforeDate - 1)
-            let unrelatedMessage = MessageDetail(senderID: try anotherUser1.requireID(), createdAt: beforeDate - 1)
+            let smallerThanBeforeDateContact1 = makeContactDetail(
+                id: 100,
+                user: currentUser,
+                anotherUser: anotherUser1,
+                senderID: try currentUser.requireID(),
+                lateUpdate: beforeDate.adding(seconds: -1)
+            )
+            let equalToBeforeDateContact = makeContactDetail(
+                id: 200,
+                user: currentUser,
+                anotherUser: anotherUser2,
+                senderID: try anotherUser2.requireID(),
+                lateUpdate: beforeDate
+            )
+            let greaterThanBeforeDateContact = makeContactDetail(
+                id: 300,
+                user: currentUser,
+                anotherUser: anotherUser3,
+                senderID: try anotherUser3.requireID(),
+                lateUpdate: beforeDate.adding(seconds: 1)
+            )
+            let smallerThanBeforeDateContact2 = makeContactDetail(
+                id: 400,
+                user: currentUser,
+                anotherUser: anotherUser4,
+                senderID: try anotherUser4.requireID(),
+                lateUpdate: beforeDate.adding(seconds: -1)
+            )
+            let nonCurrentUserContact = makeContactDetail(
+                id: 500,
+                user: anotherUser1,
+                anotherUser: anotherUser2,
+                senderID: try anotherUser1.requireID(),
+                lateUpdate: beforeDate.adding(seconds: -1)
+            )
             
-            let contactResponses = try await createContactResponses(
-                userPairs: [
-                    (currentUser, anotherUser1, [smallerThanBeforeDateMsgForContact1]), // contactID: 1
-                    (currentUser, anotherUser2, [equalBeforeDateMsgForContact2]), // contactID: 2
-                    (currentUser, anotherUser3, [greaterThanBeforeDateMsgForContact3]), // contactID: 3
-                    (currentUser, anotherUser4, [smallerThanBeforeDateMsgForContact4]), // contactID: 4
-                    (anotherUser1, anotherUser2, [unrelatedMessage]), // contactID: 5, unrelated contact
+            let expectedContactResponses = try await createContactResponses(
+                contactDetails: [
+                    smallerThanBeforeDateContact1,
+                    equalToBeforeDateContact,
+                    greaterThanBeforeDateContact,
+                    smallerThanBeforeDateContact2,
+                    nonCurrentUserContact
                 ],
                 app: app
-            )
-            let expectedContactResponses = Array(contactResponses
-                .filter { [1, 2, 3, 4].contains($0.id) }
-                .filter { $0.lastUpdate < beforeDate }
-                .sorted(by: { $0.lastUpdate > $1.lastUpdate }))
+            ).filter { [smallerThanBeforeDateContact1.id, smallerThanBeforeDateContact2.id].contains($0.id) }
+            .sorted(by: { $0.lastUpdate > $1.lastUpdate })
             
             try await app.test(.GET, .apiPath("contacts")) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
@@ -474,37 +501,38 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         #expect(contact.unreadMessageCount == 0, sourceLocation: sourceLocation)
     }
     
-    private struct MessageDetail {
-        let senderID: Int
-        let text: String
-        let createdAt: Date
-        
-        init(senderID: Int, text: String = "any text", createdAt: Date = .now) {
-            self.senderID = senderID
-            self.text = text
-            self.createdAt = createdAt
-        }
+    private func makeContactDetail(id: Int? = nil,
+                                   user: User,
+                                   anotherUser: User,
+                                   senderID: Int,
+                                   text: String = "any text",
+                                   lateUpdate: Date = .now) -> ContactDetail {
+        let messageDetail = MessageDetail(senderID: senderID, text: text, lastUpdate: lateUpdate)
+        return ContactDetail(id: id, user: user, anotherUser: anotherUser, messageDetails: [messageDetail])
     }
     
-    private func createContactResponses(userPairs: [(user: User, anotherUser: User, messageDetails: [MessageDetail])],
+    private func createContactResponses(contactDetails: [ContactDetail],
                                         app: Application) async throws -> [ContactResponse] {
         var contacts = [ContactResponse]()
-        for pair in userPairs {
+        for detail in contactDetails {
             contacts.append(try await createContactResponse(
-                user: pair.user,
-                anotherUser: pair.anotherUser,
-                messageDetails: pair.messageDetails,
+                id: detail.id,
+                user: detail.user,
+                anotherUser: detail.anotherUser,
+                messageDetails: detail.messageDetails,
                 app: app
             ))
         }
         return contacts
     }
     
-    private func createContactResponse(user: User,
+    private func createContactResponse(id: Int? = nil,
+                                       user: User,
                                        anotherUser: User,
                                        messageDetails: [MessageDetail] = [],
                                        app: Application) async throws -> ContactResponse {
         let contact = try await createContact(
+            id: id,
             user: user,
             anotherUser: anotherUser,
             messageDetails: messageDetails,
@@ -519,12 +547,14 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         )
     }
     
-    private func createContact(user: User,
+    private func createContact(id: Int? = nil,
+                               user: User,
                                anotherUser: User,
                                blockedByUserID: Int? = nil,
                                messageDetails: [MessageDetail] = [],
                                app: Application) async throws -> Contact {
         let contact = try Contact(
+            id: id,
             userID1: user.requireID(),
             userID2: anotherUser.requireID(),
             blockedByUserID: blockedByUserID
@@ -536,14 +566,33 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
         try await contact.$messages.create(pendingMessages, on: app.db)
         
-        // Update createdAt depends on messageDetail.createdAt
+        // Update createdAt depends on messageDetail.lastUpdate
         let messages = try await contact.$messages.get(on: app.db)
         for i in 0..<messages.count {
             let message = messages[i]
-            message.createdAt = messageDetails[i].createdAt
+            message.createdAt = messageDetails[i].lastUpdate
             try await message.update(on: app.db)
         }
         
         return contact
+    }
+    
+    private struct MessageDetail {
+        let senderID: Int
+        let text: String
+        let lastUpdate: Date
+    }
+    
+    private struct ContactDetail {
+        let id: Int?
+        let user: User
+        let anotherUser: User
+        let messageDetails: [MessageDetail]
+    }
+}
+
+extension Date {
+    func adding(seconds: TimeInterval) -> Date {
+        self + seconds
     }
 }
