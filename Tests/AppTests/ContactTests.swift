@@ -198,7 +198,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 user: currentUser,
                 anotherUser: anotherUser1,
                 senderID: try currentUser.requireID(),
-                lateUpdate: beforeDate.adding(seconds: -1)
+                lateUpdate: beforeDate.reducing(seconds: 1)
             )
             let equalToBeforeDateContact = makeContactDetail(
                 id: 200,
@@ -219,14 +219,14 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 user: currentUser,
                 anotherUser: anotherUser4,
                 senderID: try anotherUser4.requireID(),
-                lateUpdate: beforeDate.adding(seconds: -1)
+                lateUpdate: beforeDate.reducing(seconds: 1)
             )
             let nonCurrentUserContact = makeContactDetail(
                 id: 500,
                 user: anotherUser1,
                 anotherUser: anotherUser2,
                 senderID: try anotherUser1.requireID(),
-                lateUpdate: beforeDate.adding(seconds: -1)
+                lateUpdate: beforeDate.reducing(seconds: 1)
             )
             
             let expectedContactResponses = try await createContactResponses(
@@ -238,7 +238,8 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                     nonCurrentUserContact
                 ],
                 app: app
-            ).filter { [smallerThanBeforeDateContact1.id, smallerThanBeforeDateContact2.id].contains($0.id) }
+            )
+            .filter { [smallerThanBeforeDateContact1.id, smallerThanBeforeDateContact2.id].contains($0.id) }
             .sorted(by: { $0.lastUpdate > $1.lastUpdate })
             
             try await app.test(.GET, .apiPath("contacts")) { req in

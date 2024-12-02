@@ -1,7 +1,11 @@
 import Foundation
 
 extension Date {
-    func adding(seconds: TimeInterval) -> Date {
-        self + seconds
+    func adding(seconds: UInt) -> Date {
+        self + TimeInterval(seconds)
+    }
+    
+    func reducing(seconds: UInt) -> Date {
+        self - TimeInterval(seconds)
     }
 }
