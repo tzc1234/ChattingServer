@@ -191,19 +191,24 @@ struct ContactController: RouteCollection {
 
 private extension Contact {
     func toResponse(currentUserID: Int, req: Request, avatarDirectoryPath: String) async throws -> ContactResponse {
-        try ContactResponse(
+        guard let lastUpdate = try await lastUpdate(db: req.db) else {
+            throw ContactError.databaseError
+        }
+        
+        return try ContactResponse(
             id: requireID(),
-            responder: await loadResponder(currentUserID: currentUserID, on: req.db)
+            responder: await getResponder(currentUserID: currentUserID, on: req.db)
                 .toResponse(
                     app: req.application,
                     avatarDirectoryPath: avatarDirectoryPath
                 ),
             blockedByUserID: $blockedBy.id,
-            unreadMessageCount: await unreadMessagesCount(currentUserID: currentUserID, db: req.db)
+            unreadMessageCount: await unreadMessagesCount(currentUserID: currentUserID, db: req.db),
+            lastUpdate: lastUpdate
         )
     }
     
-    private func loadResponder(currentUserID: Int, on db: Database) async throws -> User {
+    private func getResponder(currentUserID: Int, on db: Database) async throws -> User {
         if $user1.id != currentUserID {
             try await $user1.get(on: db)
         } else {
