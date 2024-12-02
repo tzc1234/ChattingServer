@@ -182,8 +182,8 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
-    @Test("get contacts with before date")
-    func getContactsWithBeforeDate() async throws {
+    @Test("get contacts with before date and limit")
+    func getContactsWithBeforeDateAndLimit() async throws {
         try await makeApp { app in
             let currentUserToken = try await createUserForTokenResponse(app)
             let currentUser = try #require(try await User.find(currentUserToken.user.id!, on: app.db))
@@ -242,6 +242,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             .filter { [smallerThanBeforeDateContact1.id, smallerThanBeforeDateContact2.id].contains($0.id) }
             .sorted(by: { $0.lastUpdate > $1.lastUpdate })
             
+            // test beforeDate
             try await app.test(.GET, .apiPath("contacts")) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
                 try req.query.encode(ContactIndexRequest(before: beforeDate, limit: nil))
@@ -250,6 +251,19 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 
                 let contactsResponse = try res.content.decode(ContactsResponse.self)
                 expect(contacts: contactsResponse.contacts, as: expectedContactResponses)
+            }
+            
+            // test beforeDate with limit
+            let limit = 1
+            
+            try await app.test(.GET, .apiPath("contacts")) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
+                try req.query.encode(ContactIndexRequest(before: beforeDate, limit: limit))
+            } afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                
+                let contactsResponse = try res.content.decode(ContactsResponse.self)
+                expect(contacts: contactsResponse.contacts, as: Array(expectedContactResponses[..<limit]))
             }
         }
     }
