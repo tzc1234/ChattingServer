@@ -39,39 +39,41 @@ struct ContactController: RouteCollection {
                                   before: Date? = nil,
                                   limit: Int? = nil,
                                   req: Request) async throws -> ContactsResponse {
-        let contactTab = SQLQualifiedTable(Contact.schema, space: Contact.space)
-        let messageTab = SQLQualifiedTable(Message.schema, space: Message.space)
-        let contactIDColumn = SQLColumn(SQLLiteral.string("id"), table: contactTab)
-        let createdAtLiteral = SQLLiteral.string("created_at")
-        let numericCurrentUserID = SQLLiteral.numeric("\(currentUserID)")
-        
         guard let sql = req.db as? SQLDatabase else {
             throw ContactError.databaseError
         }
         
+        let contactTable = SQLQualifiedTable(Contact.schema, space: Contact.space)
+        let messageTable = SQLQualifiedTable(Message.schema, space: Message.space)
+        
+        let contactIDColumn = SQLColumn(SQLLiteral.string("id"), table: contactTable)
+        let currentUserIDNumeric = SQLLiteral.numeric("\(currentUserID)")
+        
+        let createdAtLiteral = SQLLiteral.string("created_at")
+        let messageCreatedAtColumn = SQLColumn(createdAtLiteral, table: messageTable)
+        let contactCreatedAtColumn = SQLColumn(createdAtLiteral, table: contactTable)
+        let maxMessageCreatedAtFunction = SQLFunction("max", args: messageCreatedAtColumn)
+        let ifNullCreatedAtFunction = SQLFunction("ifnull", args: maxMessageCreatedAtFunction, contactCreatedAtColumn)
+        
         var query = sql.select()
-            .column(SQLColumn(SQLLiteral.all, table: contactTab))
-            .column(
-                SQLFunction(
-                    "ifnull",
-                    args: SQLFunction("max", args: SQLColumn(createdAtLiteral, table: messageTab)),
-                        SQLColumn(createdAtLiteral, table: contactTab)
-                ),
-                as: "updated_at"
-            )
-            .from(contactTab)
-            .join(messageTab, method: SQLJoinMethod.left, on:
-                    contactIDColumn,
-                    .equal,
-                    SQLColumn(SQLLiteral.string("contact_id"), table: messageTab)
+            .column(SQLColumn(SQLLiteral.all, table: contactTable))
+            .column(ifNullCreatedAtFunction, as: "last_update")
+            .from(contactTable)
+            .join(
+                messageTable,
+                method: SQLJoinMethod.left,
+                on: contactIDColumn,
+                .equal,
+                SQLColumn(SQLLiteral.string("contact_id"), table: messageTable)
             )
             .groupBy(contactIDColumn)
         
-        before.map { query = query.having("updated_at", .lessThan, $0) }
+        before.map { query = query.having("last_update", .lessThan, $0) }
         
-        query = query.having(SQLColumn(SQLLiteral.string("user_id1"), table: contactTab), .equal, numericCurrentUserID)
-            .orHaving(SQLColumn(SQLLiteral.string("user_id2"), table: contactTab), .equal, numericCurrentUserID)
-            .orderBy("updated_at", .descending)
+        query = query
+            .having(SQLColumn(SQLLiteral.string("user_id1"), table: contactTable), .equal, currentUserIDNumeric)
+            .orHaving(SQLColumn(SQLLiteral.string("user_id2"), table: contactTable), .equal, currentUserIDNumeric)
+            .orderBy("last_update", .descending)
             .limit(limit ?? defaultLimit)
         
         let contacts = try await query.all().map { try $0.decode(fluentModel: Contact.self) }
