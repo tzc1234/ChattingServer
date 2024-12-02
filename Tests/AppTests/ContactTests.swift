@@ -149,7 +149,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             
             try await app.test(.GET, .apiPath("contacts")) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
-                try req.content.encode(ContactIndexRequest(before: nil, limit: nil))
+                try req.query.encode(ContactIndexRequest(before: nil, limit: nil))
             } afterResponse: { res async throws in
                 #expect(res.status == .ok)
                 let contactsResponse = try res.content.decode(ContactsResponse.self)
@@ -172,7 +172,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             
             try await app.test(.GET, .apiPath("contacts")) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
-                try req.content.encode(ContactIndexRequest(before: nil, limit: nil))
+                try req.query.encode(ContactIndexRequest(before: nil, limit: nil))
             } afterResponse: { res async throws in
                 #expect(res.status == .ok)
                 
@@ -182,91 +182,49 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
-//    @Test("get multiple contacts before a contactID")
-//    func getMultipleContactsBeforeContactID() async throws {
-//        try await makeApp { app in
-//            let currentUserToken = try await createUserForTokenResponse(app)
-//            let currentUser = try #require(try await User.find(currentUserToken.user.id!, on: app.db))
-//            let anotherUser1 = try await createUser(app, email: "another-user1@email.com")
-//            let anotherUser2 = try await createUser(app, email: "another-user2@email.com")
-//            let anotherUser3 = try await createUser(app, email: "another-user3@email.com")
-//            let anotherUser4 = try await createUser(app, email: "another-user4@email.com")
-//            let anotherUser5 = try await createUser(app, email: "another-user5@email.com")
-//            
-//            let contactResponses = try await createContactResponses(
-//                userPairs: [
-//                    (currentUser, anotherUser1), // contactID: 1
-//                    (currentUser, anotherUser2), // contactID: 2
-//                    (currentUser, anotherUser3), // contactID: 3
-//                    (currentUser, anotherUser4), // contactID: 4
-//                    (currentUser, anotherUser5), // contactID: 5
-//                ],
-//                app: app
-//            )
-//            let beforeContactID = 5
-//            let limit = 3
-//            let expectedContactResponses = Array(contactResponses
-//                .filter({ $0.id < beforeContactID })
-//                .sorted(by: { $0.id > $1.id })[..<limit])
-//            
-//            try await app.test(.GET, .apiPath("contacts")) { req in
-//                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
-//                try req.query.encode(ContactIndexRequest(
-//                    beforeContactID: beforeContactID,
-//                    afterContactID: nil,
-//                    limit: limit
-//                ))
-//            } afterResponse: { res async throws in
-//                #expect(res.status == .ok)
-//                
-//                let contactsResponse = try res.content.decode(ContactsResponse.self)
-//                #expect(contactsResponse.contacts == expectedContactResponses)
-//            }
-//        }
-//    }
-//    
-//    @Test("get multiple contacts after a contactID")
-//    func getMultipleContactsAfterContactID() async throws {
-//        try await makeApp { app in
-//            let currentUserToken = try await createUserForTokenResponse(app)
-//            let currentUser = try #require(try await User.find(currentUserToken.user.id!, on: app.db))
-//            let anotherUser1 = try await createUser(app, email: "another-user1@email.com")
-//            let anotherUser2 = try await createUser(app, email: "another-user2@email.com")
-//            let anotherUser3 = try await createUser(app, email: "another-user3@email.com")
-//            let anotherUser4 = try await createUser(app, email: "another-user4@email.com")
-//            let anotherUser5 = try await createUser(app, email: "another-user5@email.com")
-//            
-//            let contactResponses = try await createContactResponses(
-//                userPairs: [
-//                    (currentUser, anotherUser1), // contactID: 1
-//                    (currentUser, anotherUser2), // contactID: 2
-//                    (currentUser, anotherUser3), // contactID: 3
-//                    (currentUser, anotherUser4), // contactID: 4
-//                    (currentUser, anotherUser5), // contactID: 5
-//                ],
-//                app: app
-//            )
-//            let afterContactID = 1
-//            let limit = 3
-//            let expectedContactResponses = Array(contactResponses
-//                .filter({ $0.id > afterContactID })
-//                .sorted(by: { $0.id > $1.id })[..<limit])
-//            
-//            try await app.test(.GET, .apiPath("contacts")) { req in
-//                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
-//                try req.query.encode(ContactIndexRequest(
-//                    beforeContactID: nil,
-//                    afterContactID: afterContactID,
-//                    limit: limit
-//                ))
-//            } afterResponse: { res async throws in
-//                #expect(res.status == .ok)
-//                
-//                let contactsResponse = try res.content.decode(ContactsResponse.self)
-//                #expect(contactsResponse.contacts == expectedContactResponses)
-//            }
-//        }
-//    }
+    @Test("get contacts before date")
+    func getContactsBeforeDate() async throws {
+        try await makeApp { app in
+            let currentUserToken = try await createUserForTokenResponse(app)
+            let currentUser = try #require(try await User.find(currentUserToken.user.id!, on: app.db))
+            let anotherUser1 = try await createUser(app, email: "another-user1@email.com")
+            let anotherUser2 = try await createUser(app, email: "another-user2@email.com")
+            let anotherUser3 = try await createUser(app, email: "another-user3@email.com")
+            let anotherUser4 = try await createUser(app, email: "another-user4@email.com")
+            
+            let beforeDate = Date.now
+            let smallerThanBeforeDateMsgForContact1 = MessageDetail(senderID: try currentUser.requireID(), createdAt: beforeDate - 1)
+            let equalBeforeDateMsgForContact2 = MessageDetail(senderID: try anotherUser2.requireID(), createdAt: beforeDate)
+            let greaterThanBeforeDateMsgForContact3 = MessageDetail(senderID: try anotherUser3.requireID(), createdAt: beforeDate + 1)
+            let smallerThanBeforeDateMsgForContact4 = MessageDetail(senderID: try anotherUser4.requireID(), createdAt: beforeDate - 1)
+            let unrelatedMessage = MessageDetail(senderID: try anotherUser1.requireID(), createdAt: beforeDate - 1)
+            
+            let contactResponses = try await createContactResponses(
+                userPairs: [
+                    (currentUser, anotherUser1, [smallerThanBeforeDateMsgForContact1]), // contactID: 1
+                    (currentUser, anotherUser2, [equalBeforeDateMsgForContact2]), // contactID: 2
+                    (currentUser, anotherUser3, [greaterThanBeforeDateMsgForContact3]), // contactID: 3
+                    (currentUser, anotherUser4, [smallerThanBeforeDateMsgForContact4]), // contactID: 4
+                    (anotherUser1, anotherUser2, [unrelatedMessage]), // contactID: 5, unrelated contact
+                ],
+                app: app
+            )
+            let expectedContactResponses = Array(contactResponses
+                .filter { [1, 2, 3, 4].contains($0.id) }
+                .filter { $0.lastUpdate < beforeDate }
+                .sorted(by: { $0.lastUpdate > $1.lastUpdate }))
+            
+            try await app.test(.GET, .apiPath("contacts")) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
+                try req.query.encode(ContactIndexRequest(before: beforeDate, limit: nil))
+            } afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                
+                let contactsResponse = try res.content.decode(ContactsResponse.self)
+                expect(contacts: contactsResponse.contacts, as: expectedContactResponses)
+            }
+        }
+    }
     
     @Test("block contact failure without a token")
     func blockContactFailureWithoutToken() async throws {
@@ -516,24 +474,47 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         #expect(contact.unreadMessageCount == 0, sourceLocation: sourceLocation)
     }
     
-    private func createContactResponses(userPairs: [(user: User, anotherUser: User)],
+    private struct MessageDetail {
+        let senderID: Int
+        let text: String
+        let createdAt: Date
+        
+        init(senderID: Int, text: String = "any text", createdAt: Date = .now) {
+            self.senderID = senderID
+            self.text = text
+            self.createdAt = createdAt
+        }
+    }
+    
+    private func createContactResponses(userPairs: [(user: User, anotherUser: User, messageDetails: [MessageDetail])],
                                         app: Application) async throws -> [ContactResponse] {
         var contacts = [ContactResponse]()
         for pair in userPairs {
-            contacts.append(try await createContactResponse(user: pair.user, anotherUser: pair.anotherUser, app: app))
+            contacts.append(try await createContactResponse(
+                user: pair.user,
+                anotherUser: pair.anotherUser,
+                messageDetails: pair.messageDetails,
+                app: app
+            ))
         }
         return contacts
     }
     
     private func createContactResponse(user: User,
                                        anotherUser: User,
+                                       messageDetails: [MessageDetail] = [],
                                        app: Application) async throws -> ContactResponse {
-        let contact = try await createContact(user: user, anotherUser: anotherUser, app: app)
+        let contact = try await createContact(
+            user: user,
+            anotherUser: anotherUser,
+            messageDetails: messageDetails,
+            app: app
+        )
         return ContactResponse(
             id: try contact.requireID(),
             responder: anotherUser.toResponse(app: app, avatarDirectoryPath: testAvatarDirectoryPath),
             blockedByUserID: nil,
-            unreadMessageCount: 0,
+            unreadMessageCount: try await contact.unreadMessagesCount(currentUserID: user.requireID(), db: app.db),
             lastUpdate: try await contact.lastUpdate(db: app.db)!
         )
     }
@@ -541,6 +522,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
     private func createContact(user: User,
                                anotherUser: User,
                                blockedByUserID: Int? = nil,
+                               messageDetails: [MessageDetail] = [],
                                app: Application) async throws -> Contact {
         let contact = try Contact(
             userID1: user.requireID(),
@@ -548,6 +530,20 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             blockedByUserID: blockedByUserID
         )
         try await contact.create(on: app.db)
+        
+        let pendingMessages = try messageDetails.map {
+            Message(contactID: try contact.requireID(), senderID: $0.senderID, text: $0.text)
+        }
+        try await contact.$messages.create(pendingMessages, on: app.db)
+        
+        // Update createdAt depends on messageDetail.createdAt
+        let messages = try await contact.$messages.get(on: app.db)
+        for i in 0..<messages.count {
+            let message = messages[i]
+            message.createdAt = messageDetails[i].createdAt
+            try await message.update(on: app.db)
+        }
+        
         return contact
     }
 }
