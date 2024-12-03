@@ -28,8 +28,8 @@ struct MessageTests: AppTests {
         }
     }
     
-    @Test("get messages failure with an invalid contactID")
-    func getMessagesFailureWithInvalidContactID() async throws {
+    @Test("get messages failure with a non-existed contact")
+    func getMessagesFailureWithNonExistedContact() async throws {
         try await makeApp { app in
             let (_, accessToken) = try await createUserAndAccessToken(app)
             
@@ -211,6 +211,20 @@ struct MessageTests: AppTests {
                 req.headers.bearerAuthorization = BearerAuthorization(token: invalidToken)
             } afterResponse: { res async throws in
                 #expect(res.status == .unauthorized)
+            }
+        }
+    }
+    
+    @Test("read message failure with a non-existed contact")
+    func readMessageFailureWithNonExistedContact() async throws {
+        try await makeApp { app in
+            let (_, token) = try await createUserAndAccessToken(app)
+            
+            try await app.test(.PATCH, messageAPIPath("read")) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: token)
+                try req.content.encode(ReadMessageRequest(untilMessageID: 1))
+            } afterResponse: { res async throws in
+                #expect(res.status == .notFound)
             }
         }
     }
