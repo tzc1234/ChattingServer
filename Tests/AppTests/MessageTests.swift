@@ -302,19 +302,27 @@ struct MessageTests: AppTests {
             
             let url = "ws://localhost:\(port)/\(messageAPIPath("channel"))"
             let elg = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+            let promise = elg.next().makePromise(of: ByteBuffer.self)
             var header = HTTPHeaders()
             header.bearerAuthorization = BearerAuthorization(token: accessToken)
             
             let messageText = "Hello, world!"
             let encoded = try JSONEncoder().encode(IncomingMessage(text: messageText))
-            try await WebSocket.connect(to: url, headers: header, on: elg.next()) { ws in
+            let data = try await WebSocket.connect(to: url, headers: header, on: elg.next()) { ws in
                 ws.send(encoded)
                 ws.onBinary { ws, data in
-                    let decoded = try! JSONDecoder().decode(MessageResponse.self, from: data)
-                    #expect(decoded.text == messageText)
-                    let _ = ws.close(code: .goingAway)
+                    promise.succeed(data)
+                    ws.close(code: .goingAway).cascadeFailure(to: promise)
                 }
-            }
+            }.flatMap {
+                promise.futureResult
+            }.flatMapError { error in
+                promise.fail(error)
+                return promise.futureResult
+            }.get()
+            
+            let decoded = try JSONDecoder().decode(MessageResponse.self, from: data)
+            #expect(decoded.text == messageText)
         }
     }
     
