@@ -44,6 +44,24 @@ struct MessageTests: AppTests {
         }
     }
     
+    @Test("get no messages")
+    func getNoMessages() async throws {
+        try await makeApp { app in
+            let (currentUser, accessToken) = try await createUserAndAccessToken(app)
+            let anotherUser = try await createUser(app, email: "another@email.com")
+            try await createContact(user: currentUser, anotherUser: anotherUser, app: app)
+            
+            try await app.test(.GET, messageAPIPath()) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
+            } afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                
+                let messagesResponse = try res.content.decode(MessagesResponse.self)
+                #expect(messagesResponse.messages.isEmpty)
+            }
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(_ test: (Application) async throws -> ()) async throws {
@@ -53,6 +71,15 @@ struct MessageTests: AppTests {
             webSocketStore: WebSocketStore(),
             test
         )
+    }
+    
+    @discardableResult
+    private func createContact(user: User,
+                               anotherUser: User,
+                               app: Application) async throws -> Contact {
+        let contact = try Contact(id: contactID, userID1: user.requireID(), userID2: anotherUser.requireID())
+        try await contact.create(on: app.db)
+        return contact
     }
     
     private func messageAPIPath() -> String {
