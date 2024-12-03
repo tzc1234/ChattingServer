@@ -285,6 +285,39 @@ struct MessageTests: AppTests {
         }
     }
     
+    @Test("send message with webSocket successfully")
+    func sendMessageWithWebSocketSuccessfully() async throws {
+        try await makeApp { app in
+            let port = 8084
+            app.http.server.configuration.port = port
+            try await app.startup()
+            
+            let (currentUser, accessToken) = try await createUserAndAccessToken(app)
+            let anotherUser = try await createUser(app, email: "another@email.com")
+            try await createContact(
+                user: currentUser,
+                anotherUser: anotherUser,
+                app: app
+            )
+            
+            let url = "ws://localhost:\(port)/\(messageAPIPath("channel"))"
+            let elg = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+            var header = HTTPHeaders()
+            header.bearerAuthorization = BearerAuthorization(token: accessToken)
+            
+            let messageText = "Hello, world!"
+            let encoded = try JSONEncoder().encode(IncomingMessage(text: messageText))
+            try await WebSocket.connect(to: url, headers: header, on: elg.next()) { ws in
+                ws.send(encoded)
+                ws.onBinary { ws, data in
+                    let decoded = try! JSONDecoder().decode(MessageResponse.self, from: data)
+                    #expect(decoded.text == messageText)
+                    let _ = ws.close(code: .goingAway)
+                }
+            }
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(_ test: (Application) async throws -> ()) async throws {
