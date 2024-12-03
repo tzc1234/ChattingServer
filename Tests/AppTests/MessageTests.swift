@@ -15,7 +15,7 @@ struct MessageTests: AppTests {
         }
     }
     
-    @Test("get messages failure with invalid token")
+    @Test("get messages failure with an invalid token")
     func newContactFailureWithInvalidToken() async throws {
         let invalidToken = "invalid-token"
         
@@ -193,6 +193,28 @@ struct MessageTests: AppTests {
         }
     }
     
+    @Test("read message failure without a token")
+    func readMessageFailureWithoutToken() async throws {
+        try await makeApp { app in
+            try await app.test(.PATCH, messageAPIPath("read")) { res async throws in
+                #expect(res.status == .unauthorized)
+            }
+        }
+    }
+    
+    @Test("read message failure with an invalid token")
+    func readMessageWithInvalidToken() async throws {
+        let invalidToken = "invalid-token"
+        
+        try await makeApp { app in
+            try await app.test(.PATCH, messageAPIPath("read")) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: invalidToken)
+            } afterResponse: { res async throws in
+                #expect(res.status == .unauthorized)
+            }
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(_ test: (Application) async throws -> ()) async throws {
@@ -224,8 +246,8 @@ struct MessageTests: AppTests {
         }
     }
     
-    private func messageAPIPath() -> String {
-        .apiPath("contacts", "\(contactID)", "messages")
+    private func messageAPIPath(_ lastPath: String = "") -> String {
+        .apiPath("contacts", "\(contactID)", "messages", lastPath)
     }
     
     private var contactID: Int { 99 }
