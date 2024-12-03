@@ -251,6 +251,40 @@ struct MessageTests: AppTests {
         }
     }
     
+    @Test("read all messages until a messageID which belongs to current user (sender not equal current user)")
+    func readAllMessageUntilMessageID() async throws {
+        try await makeApp { app in
+            let (currentUser, accessToken) = try await createUserAndAccessToken(app)
+            let anotherUser = try await createUser(app, email: "another@email.com")
+            let messageDetails = [
+                MessageDetail(id: 1, senderID: currentUser.id!, isRead: false),
+                MessageDetail(id: 2, senderID: anotherUser.id!, isRead: false),
+                MessageDetail(id: 3, senderID: anotherUser.id!, isRead: false),
+                MessageDetail(id: 4, senderID: anotherUser.id!, isRead: false),
+            ]
+            let contact = try await createContact(
+                user: currentUser,
+                anotherUser: anotherUser,
+                messageDetails: messageDetails,
+                app: app
+            )
+            let untilMessageID = 3
+            
+            try await app.test(.PATCH, messageAPIPath("read")) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
+                try req.content.encode(ReadMessageRequest(untilMessageID: untilMessageID))
+            } afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                
+                let messages = try await contact.$messages.get(reload: true, on: app.db)
+                #expect(messages[0].isRead == false)
+                #expect(messages[1].isRead == true)
+                #expect(messages[2].isRead == true)
+                #expect(messages[3].isRead == false)
+            }
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(_ test: (Application) async throws -> ()) async throws {
@@ -262,10 +296,11 @@ struct MessageTests: AppTests {
         )
     }
     
+    @discardableResult
     private func createContact(user: User,
                                anotherUser: User,
                                messageDetails: [MessageDetail] = [],
-                               app: Application) async throws {
+                               app: Application) async throws -> Contact {
         let contact = try Contact(id: contactID, userID1: user.requireID(), userID2: anotherUser.requireID())
         try await contact.create(on: app.db)
         
@@ -280,6 +315,8 @@ struct MessageTests: AppTests {
             message.createdAt = messageDetails[i].createdAt
             try await message.update(on: app.db)
         }
+        
+        return contact
     }
     
     private func messageAPIPath(_ lastPath: String = "") -> String {
