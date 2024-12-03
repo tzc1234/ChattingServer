@@ -229,6 +229,28 @@ struct MessageTests: AppTests {
         }
     }
     
+    @Test("read message ok with a non-existed messageID")
+    func readMessageOKWithNonExistedMessageID() async throws {
+        try await makeApp { app in
+            let (currentUser, accessToken) = try await createUserAndAccessToken(app)
+            let anotherUser = try await createUser(app, email: "another@email.com")
+            try await createContact(
+                user: currentUser,
+                anotherUser: anotherUser,
+                messageDetails: [],
+                app: app
+            )
+            let nonExistedMessageID = 1
+            
+            try await app.test(.PATCH, messageAPIPath("read")) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
+                try req.content.encode(ReadMessageRequest(untilMessageID: nonExistedMessageID))
+            } afterResponse: { res async throws in
+                #expect(res.status == .ok)
+            }
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(_ test: (Application) async throws -> ()) async throws {
