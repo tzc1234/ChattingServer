@@ -148,6 +148,51 @@ struct MessageTests: AppTests {
         }
     }
     
+    @Test("get messages with afterMessageID. The first non-current user unread message should be at last when it within the limit")
+    func getMessagesWithAfterMessageIDAndLimit() async throws {
+        try await makeApp { app in
+            let (currentUser, accessToken) = try await createUserAndAccessToken(app)
+            let anotherUser = try await createUser(app, email: "another@email.com")
+            let messageDetails = [
+                MessageDetail(id: 1, senderID: currentUser.id!, isRead: true),
+                MessageDetail(id: 2, senderID: currentUser.id!, isRead: true),
+                MessageDetail(id: 3, senderID: currentUser.id!, isRead: false),
+                MessageDetail(id: 4, senderID: anotherUser.id!, isRead: false),
+                MessageDetail(id: 5, senderID: anotherUser.id!, isRead: false),
+                MessageDetail(id: 6, senderID: anotherUser.id!, isRead: false),
+                MessageDetail(id: 7, senderID: anotherUser.id!, isRead: false),
+            ]
+            try await createContact(
+                user: currentUser,
+                anotherUser: anotherUser,
+                messageDetails: messageDetails,
+                app: app
+            )
+            
+            let expectedMessageResponses = messageDetails
+                .filter { [2, 3, 4].contains($0.id) }
+                .map {
+                    MessageResponse(
+                        id: $0.id,
+                        text: $0.text,
+                        senderID: $0.senderID,
+                        isRead: $0.isRead,
+                        createdAt: $0.createdAt
+                    )
+                }
+            
+            try await app.test(.GET, messageAPIPath()) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
+                try req.query.encode(MessagesIndexRequest(afterMessageID: 1, limit: 3))
+            } afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                
+                let messagesResponse = try res.content.decode(MessagesResponse.self)
+                #expect(messagesResponse.messages == expectedMessageResponses)
+            }
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(_ test: (Application) async throws -> ()) async throws {
