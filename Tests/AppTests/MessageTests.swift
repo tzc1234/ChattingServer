@@ -103,6 +103,51 @@ struct MessageTests: AppTests {
         }
     }
     
+    @Test("get messages with beforeMessageID and limit, pivoted on the first non-current user unread message")
+    func getMessagesWithBeforeMessageIDAndLimit() async throws {
+        try await makeApp { app in
+            let (currentUser, accessToken) = try await createUserAndAccessToken(app)
+            let anotherUser = try await createUser(app, email: "another@email.com")
+            let messageDetails = [
+                MessageDetail(id: 1, senderID: currentUser.id!, isRead: true),
+                MessageDetail(id: 2, senderID: currentUser.id!, isRead: true),
+                MessageDetail(id: 3, senderID: currentUser.id!, isRead: false),
+                MessageDetail(id: 4, senderID: anotherUser.id!, isRead: false), // pivot
+                MessageDetail(id: 5, senderID: anotherUser.id!, isRead: false),
+                MessageDetail(id: 6, senderID: anotherUser.id!, isRead: false),
+                MessageDetail(id: 7, senderID: anotherUser.id!, isRead: false),
+            ]
+            try await createContact(
+                user: currentUser,
+                anotherUser: anotherUser,
+                messageDetails: messageDetails,
+                app: app
+            )
+            
+            let expectedMessageResponses = messageDetails
+                .filter { [3, 4, 5].contains($0.id) }
+                .map {
+                    MessageResponse(
+                        id: $0.id,
+                        text: $0.text,
+                        senderID: $0.senderID,
+                        isRead: $0.isRead,
+                        createdAt: $0.createdAt
+                    )
+                }
+            
+            try await app.test(.GET, messageAPIPath()) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
+                try req.query.encode(MessagesIndexRequest(beforeMessageID: 6, limit: 3))
+            } afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                
+                let messagesResponse = try res.content.decode(MessagesResponse.self)
+                #expect(messagesResponse.messages == expectedMessageResponses)
+            }
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(_ test: (Application) async throws -> ()) async throws {
