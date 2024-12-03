@@ -8,4 +8,8 @@ extension Date {
     func reducing(seconds: UInt) -> Date {
         self - TimeInterval(seconds)
     }
+    
+    func removeTimeIntervalDecimal() -> Date {
+        Date(timeIntervalSince1970: TimeInterval(Int(timeIntervalSince1970)))
+    }
 }

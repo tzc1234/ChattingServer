@@ -62,6 +62,47 @@ struct MessageTests: AppTests {
         }
     }
     
+    @Test("get messages with limit")
+    func getMessagesWithLimit() async throws {
+        try await makeApp { app in
+            let (currentUser, accessToken) = try await createUserAndAccessToken(app)
+            let anotherUser = try await createUser(app, email: "another@email.com")
+            let messageDetails = [
+                MessageDetail(id: 1, senderID: currentUser.id!, text: "text1", isRead: true, createdAt: .distantPast),
+                MessageDetail(id: 2, senderID: anotherUser.id!, text: "text2", isRead: false),
+                MessageDetail(id: 3, senderID: currentUser.id!, text: "text3", isRead: false, createdAt: .distantFuture),
+                MessageDetail(id: 4, senderID: anotherUser.id!, text: "text4", isRead: false, createdAt: .distantFuture)
+            ]
+            try await createContact(
+                user: currentUser,
+                anotherUser: anotherUser,
+                messageDetails: messageDetails,
+                app: app
+            )
+            
+            let limit = 3
+            let expectedMessageResponses = messageDetails[..<limit].map {
+                MessageResponse(
+                    id: $0.id,
+                    text: $0.text,
+                    senderID: $0.senderID,
+                    isRead: $0.isRead,
+                    createdAt: $0.createdAt
+                )
+            }
+            
+            try await app.test(.GET, messageAPIPath()) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
+                try req.query.encode(MessagesIndexRequest(limit: limit))
+            } afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                
+                let messagesResponse = try res.content.decode(MessagesResponse.self)
+                #expect(messagesResponse.messages == expectedMessageResponses)
+            }
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(_ test: (Application) async throws -> ()) async throws {
@@ -73,13 +114,24 @@ struct MessageTests: AppTests {
         )
     }
     
-    @discardableResult
     private func createContact(user: User,
                                anotherUser: User,
-                               app: Application) async throws -> Contact {
+                               messageDetails: [MessageDetail] = [],
+                               app: Application) async throws {
         let contact = try Contact(id: contactID, userID1: user.requireID(), userID2: anotherUser.requireID())
         try await contact.create(on: app.db)
-        return contact
+        
+        let pendingMessages = messageDetails.map {
+            Message(id: $0.id, contactID: contactID, senderID: $0.senderID, text: $0.text, isRead: $0.isRead)
+        }
+        try await contact.$messages.create(pendingMessages, on: app.db)
+        
+        let messages = try await contact.$messages.get(on: app.db)
+        for i in 0..<messages.count {
+            let message = messages[i]
+            message.createdAt = messageDetails[i].createdAt
+            try await message.update(on: app.db)
+        }
     }
     
     private func messageAPIPath() -> String {
@@ -87,4 +139,24 @@ struct MessageTests: AppTests {
     }
     
     private var contactID: Int { 99 }
+    
+    private struct MessageDetail {
+        let id: Int
+        let senderID: Int
+        let text: String
+        let isRead: Bool
+        let createdAt: Date
+        
+        init(id: Int,
+             senderID: Int,
+             text: String = "any text",
+             isRead: Bool = false,
+             createdAt: Date = .now.removeTimeIntervalDecimal()) {
+            self.id = id
+            self.senderID = senderID
+            self.text = text
+            self.isRead = isRead
+            self.createdAt = createdAt
+        }
+    }
 }
