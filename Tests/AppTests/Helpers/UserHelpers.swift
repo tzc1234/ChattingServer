@@ -1,4 +1,5 @@
 import Vapor
+import Testing
 @testable import App
 
 func createUser(_ app: Application,
@@ -25,4 +26,12 @@ func createUserForTokenResponse(_ app: Application,
     })
     
     return tokenResponse!
+}
+
+func createUserAndAccessToken(_ app: Application,
+                              sourceLocation: SourceLocation = #_sourceLocation) async throws
+-> (user: User, accessToken: String) {
+    let token = try await createUserForTokenResponse(app)
+    let currentUser = try #require(try await User.find(token.user.id!, on: app.db), sourceLocation: sourceLocation)
+    return (currentUser, token.accessToken)
 }

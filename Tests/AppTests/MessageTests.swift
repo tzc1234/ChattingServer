@@ -28,6 +28,22 @@ struct MessageTests: AppTests {
         }
     }
     
+    @Test("get messages failure with an invalid contactID")
+    func getMessagesFailureWithInvalidContactID() async throws {
+        try await makeApp { app in
+            let (_, accessToken) = try await createUserAndAccessToken(app)
+            
+            try await app.test(.GET, messageAPIPath()) { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
+            } afterResponse: { res async throws in
+                #expect(res.status == .notFound)
+                
+                let error = try res.content.decode(ErrorResponse.self)
+                #expect(error.reason == "Contact not found")
+            }
+        }
+    }
+    
     // MARK: - Helpers
     
     private func makeApp(_ test: (Application) async throws -> ()) async throws {
