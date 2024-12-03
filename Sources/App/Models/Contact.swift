@@ -33,12 +33,18 @@ final class Contact: Model, @unchecked Sendable {
 }
 
 extension Contact {
-    func unreadMessagesCount(db: Database) async throws -> Int {
-        try await unreadMessageQuery(db: db).count()
+    func unreadMessagesCount(currentUserID: Int, db: Database) async throws -> Int {
+        try await unreadMessageQuery(currentUserID: currentUserID, db: db).count()
     }
     
-    private func unreadMessageQuery(db: Database) -> QueryBuilder<Message> {
-        $messages.query(on: db).filter(\.$isRead == false)
+    private func unreadMessageQuery(currentUserID: Int, db: Database) -> QueryBuilder<Message> {
+        $messages.query(on: db)
+            .filter(\.$isRead == false)
+            .filter(\.$sender.$id != currentUserID)
+    }
+    
+    func lastUpdate(db: Database) async throws -> Date? {
+        try await $messages.query(on: db).max(\.$createdAt) ?? createdAt
     }
 }
 

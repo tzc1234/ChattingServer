@@ -1,7 +1,15 @@
 import Fluent
 import Vapor
+import SQLKit
 
 struct ContactController: RouteCollection {
+    private var defaultLimit: Int { 20 }
+    private let avatarDirectoryPath: @Sendable () -> (String)
+    
+    init(avatarDirectoryPath: @escaping @Sendable () -> String) {
+        self.avatarDirectoryPath = avatarDirectoryPath
+    }
+    
     func boot(routes: RoutesBuilder) throws {
         let protected = routes.grouped("contacts")
             .grouped(AccessTokenGuardMiddleware(), UserAuthenticator())
@@ -17,19 +25,80 @@ struct ContactController: RouteCollection {
     
     @Sendable
     private func index(req: Request) async throws -> ContactsResponse {
+        let indexRequest = try req.query.decode(ContactIndexRequest.self)
         let currentUserID = try req.auth.require(Payload.self).userID
-        return try await getContactsResponse(for: currentUserID, req: req)
+        return try await contactsResponse(
+            for: currentUserID,
+            before: indexRequest.before,
+            limit: indexRequest.limit,
+            req: req
+        )
+    }
+    
+    private func contactsResponse(for currentUserID: Int,
+                                  before: Date? = nil,
+                                  limit: Int? = nil,
+                                  req: Request) async throws -> ContactsResponse {
+        guard let sql = req.db as? SQLDatabase else {
+            throw ContactError.databaseError
+        }
+        
+        let contactTable = SQLQualifiedTable(Contact.schema, space: Contact.space)
+        let messageTable = SQLQualifiedTable(Message.schema, space: Message.space)
+        
+        let contactIDColumn = SQLColumn(SQLLiteral.string("id"), table: contactTable)
+        let currentUserIDNumeric = SQLLiteral.numeric("\(currentUserID)")
+        
+        let createdAtLiteral = SQLLiteral.string("created_at")
+        let messageCreatedAtColumn = SQLColumn(createdAtLiteral, table: messageTable)
+        let contactCreatedAtColumn = SQLColumn(createdAtLiteral, table: contactTable)
+        let maxMessageCreatedAtFunction = SQLFunction("max", args: messageCreatedAtColumn)
+        let ifNullCreatedAtFunction = SQLFunction("ifnull", args: maxMessageCreatedAtFunction, contactCreatedAtColumn)
+        
+        var query = sql.select()
+            .column(SQLColumn(SQLLiteral.all, table: contactTable))
+            .column(ifNullCreatedAtFunction, as: "last_update")
+            .from(contactTable)
+            .join(
+                messageTable,
+                method: SQLJoinMethod.left,
+                on: contactIDColumn,
+                .equal,
+                SQLColumn(SQLLiteral.string("contact_id"), table: messageTable)
+            )
+            .groupBy(contactIDColumn)
+        
+        before.map { query = query.having("last_update", .lessThan, $0) }
+        
+        query = query
+            .having(SQLColumn(SQLLiteral.string("user_id1"), table: contactTable), .equal, currentUserIDNumeric)
+            .orHaving(SQLColumn(SQLLiteral.string("user_id2"), table: contactTable), .equal, currentUserIDNumeric)
+            .orderBy("last_update", .descending)
+            .limit(limit ?? defaultLimit)
+        
+        let contacts = try await query.all().map { try $0.decode(fluentModel: Contact.self) }
+        return try await contacts.toResponse(
+            currentUserID: currentUserID,
+            req: req,
+            avatarDirectoryPath: avatarDirectoryPath()
+        )
     }
     
     @Sendable
-    private func create(req: Request) async throws -> ContactsResponse {
+    private func create(req: Request) async throws -> ContactResponse {
         let currentUserID = try req.auth.require(Payload.self).userID
         let contactRequest = try req.content.decode(ContactRequest.self)
-        try await newContact(for: currentUserID, with: contactRequest.responderEmail, on: req.db)
-        return try await getContactsResponse(for: currentUserID, req: req)
+        let contact = try await newContact(for: currentUserID, with: contactRequest.responderEmail, on: req.db)
+        return try await contact.toResponse(
+            currentUserID: currentUserID,
+            req: req,
+            avatarDirectoryPath: avatarDirectoryPath()
+        )
     }
     
-    private func newContact(for currentUserID: Int, with responderEmail: String, on db: Database) async throws {
+    private func newContact(for currentUserID: Int,
+                            with responderEmail: String,
+                            on db: Database) async throws -> Contact {
         guard let responder = try await User.query(on: db)
             .filter(\.$email == responderEmail)
             .first(), let responderID = try? responder.requireID()
@@ -41,24 +110,19 @@ struct ContactController: RouteCollection {
             throw ContactError.responderSameAsCurrentUser
         }
         
-        try await saveNewContact(with: currentUserID, and: responderID, on: db)
+        return try await saveNewContact(with: currentUserID, and: responderID, on: db)
     }
     
-    private func saveNewContact(with currentUserID: Int, and responderID: Int, on db: Database) async throws {
+    private func saveNewContact(with currentUserID: Int,
+                                and responderID: Int,
+                                on db: Database) async throws -> Contact {
         let contact = if currentUserID < responderID {
             Contact(userID1: currentUserID, userID2: responderID)
         } else {
             Contact(userID1: responderID, userID2: currentUserID)
         }
         try await contact.save(on: db)
-    }
-    
-    private func getContactsResponse(for currentUserID: Int, req: Request) async throws -> ContactsResponse {
-        return try await Contact.query(on: req.db)
-            .filter(by: currentUserID)
-            .with(\.$blockedBy)
-            .all()
-            .toResponse(currentUserID: currentUserID, req: req)
+        return contact
     }
     
     @Sendable
@@ -77,7 +141,11 @@ struct ContactController: RouteCollection {
         contact.$blockedBy.id = currentUserID
         try await contact.update(on: req.db)
         
-        return try await contact.toResponse(currentUserID: currentUserID, req: req)
+        return try await contact.toResponse(
+            currentUserID: currentUserID,
+            req: req,
+            avatarDirectoryPath: avatarDirectoryPath()
+        )
     }
     
     @Sendable func unblock(req: Request) async throws -> ContactResponse {
@@ -99,7 +167,11 @@ struct ContactController: RouteCollection {
         contact.$blockedBy.id = nil
         try await contact.update(on: req.db)
         
-        return try await contact.toResponse(currentUserID: currentUserID, req: req)
+        return try await contact.toResponse(
+            currentUserID: currentUserID,
+            req: req,
+            avatarDirectoryPath: avatarDirectoryPath()
+        )
     }
     
     private func extractContactID(from parameters: Parameters) throws -> Int {
@@ -120,20 +192,25 @@ struct ContactController: RouteCollection {
 }
 
 private extension Contact {
-    func toResponse(currentUserID: Int, req: Request) async throws -> ContactResponse {
-        try ContactResponse(
+    func toResponse(currentUserID: Int, req: Request, avatarDirectoryPath: String) async throws -> ContactResponse {
+        guard let lastUpdate = try await lastUpdate(db: req.db) else {
+            throw ContactError.databaseError
+        }
+        
+        return try ContactResponse(
             id: requireID(),
-            responder: await loadResponder(currentUserID: currentUserID, on: req.db)
+            responder: await getResponder(currentUserID: currentUserID, on: req.db)
                 .toResponse(
                     app: req.application,
-                    avatarDirectoryPath: req.application.directory.publicDirectory + Constants.AVATARS_DIRECTORY
+                    avatarDirectoryPath: avatarDirectoryPath
                 ),
             blockedByUserID: $blockedBy.id,
-            unreadMessageCount: await unreadMessagesCount(db: req.db)
+            unreadMessageCount: await unreadMessagesCount(currentUserID: currentUserID, db: req.db),
+            lastUpdate: lastUpdate
         )
     }
     
-    private func loadResponder(currentUserID: Int, on db: Database) async throws -> User {
+    private func getResponder(currentUserID: Int, on db: Database) async throws -> User {
         if $user1.id != currentUserID {
             try await $user1.get(on: db)
         } else {
@@ -143,10 +220,14 @@ private extension Contact {
 }
 
 private extension [Contact] {
-    func toResponse(currentUserID: Int, req: Request) async throws -> ContactsResponse {
+    func toResponse(currentUserID: Int, req: Request, avatarDirectoryPath: String) async throws -> ContactsResponse {
         var contactResponses = [ContactResponse]()
         for contact in self {
-            contactResponses.append(try await contact.toResponse(currentUserID: currentUserID, req: req))
+            contactResponses.append(try await contact.toResponse(
+                currentUserID: currentUserID,
+                req: req,
+                avatarDirectoryPath: avatarDirectoryPath
+            ))
         }
         return ContactsResponse(contacts: contactResponses)
     }
