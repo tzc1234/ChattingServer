@@ -13,12 +13,13 @@ extension AppTests {
         )
     }
     
-    func withApp(avatarFilename: @escaping @Sendable (String) -> (String),
+    func withApp(eventLoopGroup: EventLoopGroup? = nil,
+                 avatarFilename: @escaping @Sendable (String) -> (String),
                  avatarDirectoryPath: @escaping @Sendable () -> (String),
                  webSocketStore: WebSocketStore,
                  _ test: (Application) async throws -> (),
                  afterShutdown: () throws -> Void = {}) async throws {
-        let app = try await Application.make(.testing)
+        let app = try await Application.make(.testing, eventLoopGroup != nil ? .shared(eventLoopGroup!) : .singleton)
         do {
             try await configure(app)
             try routes(

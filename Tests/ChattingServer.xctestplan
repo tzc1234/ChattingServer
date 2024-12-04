@@ -13,11 +13,11 @@
       "containerPath" : "container:",
       "identifier" : "App",
       "name" : "App"
-    },
-    "testExecutionOrdering" : "random"
+    }
   },
   "testTargets" : [
     {
+      "parallelizable" : false,
       "target" : {
         "containerPath" : "container:",
         "identifier" : "AppTests",

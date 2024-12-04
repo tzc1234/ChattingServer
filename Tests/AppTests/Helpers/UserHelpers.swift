@@ -1,4 +1,5 @@
 import Vapor
+import Testing
 @testable import App
 
 func createUser(_ app: Application,
@@ -25,4 +26,10 @@ func createUserForTokenResponse(_ app: Application,
     })
     
     return tokenResponse!
+}
+
+func createUserAndAccessToken(_ app: Application) async throws -> (user: User, accessToken: String) {
+    let user = try await createUser(app)
+    let accessToken = try await app.jwt.keys.sign(Payload(for: user))
+    return (user, accessToken)
 }

@@ -1,5 +1,5 @@
 import Foundation
 
-struct IncomingMessage: Decodable {
+struct IncomingMessage: Codable {
     let text: String
 }

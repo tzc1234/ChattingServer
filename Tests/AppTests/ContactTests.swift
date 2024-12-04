@@ -508,14 +508,6 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         #expect(contact.unreadMessageCount == 0, sourceLocation: sourceLocation)
     }
     
-    private func createUserAndAccessToken(_ app: Application,
-                                          sourceLocation: SourceLocation = #_sourceLocation) async throws
-    -> (user: User, accessToken: String) {
-        let token = try await createUserForTokenResponse(app)
-        let currentUser = try #require(try await User.find(token.user.id!, on: app.db), sourceLocation: sourceLocation)
-        return (currentUser, token.accessToken)
-    }
-    
     private func makeContactDetail(id: Int? = nil,
                                    user: User,
                                    anotherUser: User,

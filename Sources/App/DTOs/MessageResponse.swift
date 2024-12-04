@@ -1,6 +1,6 @@
 import Vapor
 
-struct MessageResponse: Content {
+struct MessageResponse: Content, Equatable {
     let id: Int
     let text: String
     let senderID: Int
