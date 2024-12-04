@@ -28,10 +28,8 @@ func createUserForTokenResponse(_ app: Application,
     return tokenResponse!
 }
 
-func createUserAndAccessToken(_ app: Application,
-                              sourceLocation: SourceLocation = #_sourceLocation) async throws
--> (user: User, accessToken: String) {
-    let token = try await createUserForTokenResponse(app)
-    let currentUser = try #require(try await User.find(token.user.id!, on: app.db), sourceLocation: sourceLocation)
-    return (currentUser, token.accessToken)
+func createUserAndAccessToken(_ app: Application) async throws -> (user: User, accessToken: String) {
+    let user = try await createUser(app)
+    let accessToken = try await app.jwt.keys.sign(Payload(for: user))
+    return (user, accessToken)
 }

@@ -13,8 +13,7 @@
       "containerPath" : "container:",
       "identifier" : "App",
       "name" : "App"
-    },
-    "testExecutionOrdering" : "random"
+    }
   },
   "testTargets" : [
     {

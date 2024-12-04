@@ -287,10 +287,10 @@ struct MessageTests: AppTests {
     
     @Test("send message with webSocket successfully")
     func sendMessageWithWebSocketSuccessfully() async throws {
-        try await makeApp { app in
+        let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+        try await makeApp(eventLoopGroup: eventLoopGroup) { app in
             let port = 8084
             app.http.server.configuration.port = port
-            try await app.startup()
             
             let (currentUser, accessToken) = try await createUserAndAccessToken(app)
             let anotherUser = try await createUser(app, email: "another@email.com")
@@ -301,14 +301,15 @@ struct MessageTests: AppTests {
             )
             
             let url = "ws://localhost:\(port)/\(messageAPIPath("channel"))"
-            let elg = MultiThreadedEventLoopGroup(numberOfThreads: 1)
-            let promise = elg.next().makePromise(of: ByteBuffer.self)
+            let promise = eventLoopGroup.next().makePromise(of: ByteBuffer.self)
             var header = HTTPHeaders()
             header.bearerAuthorization = BearerAuthorization(token: accessToken)
             
             let messageText = "Hello, world!"
             let encoded = try JSONEncoder().encode(IncomingMessage(text: messageText))
-            let data = try await WebSocket.connect(to: url, headers: header, on: elg.next()) { ws in
+            
+            try await app.startup()
+            let data = try await WebSocket.connect(to: url, headers: header, on: eventLoopGroup.next()) { ws in
                 ws.send(encoded)
                 ws.onBinary { ws, data in
                     promise.succeed(data)
@@ -328,8 +329,9 @@ struct MessageTests: AppTests {
     
     // MARK: - Helpers
     
-    private func makeApp(_ test: (Application) async throws -> ()) async throws {
+    private func makeApp(eventLoopGroup: EventLoopGroup? = nil, _ test: (Application) async throws -> ()) async throws {
         try await withApp(
+            eventLoopGroup: eventLoopGroup,
             avatarFilename: { _ in "any-filename.png" },
             avatarDirectoryPath: { "/anyPath" },
             webSocketStore: WebSocketStore(),
