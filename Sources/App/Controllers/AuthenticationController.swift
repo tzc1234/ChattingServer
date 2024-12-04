@@ -1,12 +1,17 @@
-import Fluent
 import Vapor
 
 struct AuthenticationController: RouteCollection, Sendable {
+    private let userRepository: UserRepository
+    private let refreshTokenRepository: RefreshTokenRepository
     private let avatarFilename: @Sendable (String) -> (String)
     private let avatarDirectoryPath: @Sendable () -> (String)
     
-    init(avatarFilename: @escaping @Sendable (String) -> String,
+    init(userRepository: UserRepository,
+         refreshTokenRepository: RefreshTokenRepository,
+         avatarFilename: @escaping @Sendable (String) -> String,
          avatarDirectoryPath: @escaping @Sendable () -> String) {
+        self.userRepository = userRepository
+        self.refreshTokenRepository = refreshTokenRepository
         self.avatarFilename = avatarFilename
         self.avatarDirectoryPath = avatarDirectoryPath
     }
@@ -53,7 +58,7 @@ struct AuthenticationController: RouteCollection, Sendable {
         let user = request.toModel()
         user.password = try await req.password.async.hash(user.password)
         user.avatarFilename = savedAvatarFilename
-        try await user.save(on: req.db)
+        try await userRepository.create(user)
         
         return try await newTokenResponse(for: user, req: req)
     }
@@ -61,19 +66,13 @@ struct AuthenticationController: RouteCollection, Sendable {
     @Sendable
     private func login(req: Request) async throws -> TokenResponse {
         let loginRequest = try req.content.decode(LoginRequest.self)
-        
-        guard let user = try await User.query(on: req.db)
-            .filter(\.$email == loginRequest.email)
-            .first(), try await req.password.async.verify(loginRequest.password, created: user.password)
+        guard let user = try await userRepository.findBy(email: loginRequest.email),
+                try await req.password.async.verify(loginRequest.password, created: user.password)
         else {
             throw AuthenticationError.userNotFound
         }
         
-        if let oldRefreshToken = try await RefreshToken.query(on: req.db)
-            .filter(\.$user.$id == user.requireID())
-            .first() {
-            try await oldRefreshToken.delete(on: req.db)
-        }
+        try await refreshTokenRepository.deleteBy(userID: user.requireID())
         
         return try await newTokenResponse(for: user, req: req)
     }
@@ -83,15 +82,14 @@ struct AuthenticationController: RouteCollection, Sendable {
         let refreshRequest = try req.content.decode(RefreshTokenRequest.self)
         let hashedRefreshToken = SHA256.hash(refreshRequest.refreshToken)
         
-        guard let refreshToken = try await RefreshToken.query(on: req.db)
-            .filter(\.$token == hashedRefreshToken)
-            .first(), refreshToken.expiresAt > .now
+        guard let refreshToken = try await refreshTokenRepository.findBy(token: hashedRefreshToken),
+                refreshToken.expiresAt > .now
         else {
             throw AuthenticationError.refreshTokenInvalid
         }
         
-        let user = try await refreshToken.$user.get(on: req.db)
-        try await refreshToken.delete(on: req.db)
+        let user = try await refreshTokenRepository.getUserFrom(refreshToken)
+        try await refreshTokenRepository.delete(refreshToken)
         
         let (newAccessToken, newRefreshToken) = try await newTokens(for: user, req: req)
         return RefreshTokenResponse(accessToken: newAccessToken, refreshToken: newRefreshToken)
@@ -112,15 +110,15 @@ struct AuthenticationController: RouteCollection, Sendable {
         let token = RandomGenerator.generate(bytes: 32)
         let hashedToken = SHA256.hash(token)
         let refreshToken = RefreshToken(token: hashedToken, userID: try user.requireID())
-        try await refreshToken.save(on: req.db)
+        try await refreshTokenRepository.create(refreshToken)
         
         return (accessToken, token)
     }
     
     @Sendable
     private func getCurrentUser(req: Request) async throws -> UserResponse {
-        let payload = try req.auth.require(Payload.self)
-        guard let user = try await User.find(payload.userID, on: req.db) else {
+        let userID = try req.auth.require(Payload.self).userID
+        guard let user = try await userRepository.findBy(id: userID) else {
             throw AuthenticationError.userNotFound
         }
         
