@@ -49,7 +49,7 @@ struct MessageTests: AppTests {
         try await makeApp { app in
             let (currentUser, accessToken) = try await createUserAndAccessToken(app)
             let anotherUser = try await createUser(app, email: "another@email.com")
-            try await createContact(user: currentUser, anotherUser: anotherUser, app: app)
+            try await createContact(user: currentUser, anotherUser: anotherUser, db: app.db)
             
             try await app.test(.GET, messageAPIPath()) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
@@ -77,7 +77,7 @@ struct MessageTests: AppTests {
                 user: currentUser,
                 anotherUser: anotherUser,
                 messageDetails: messageDetails,
-                app: app
+                db: app.db
             )
             
             let limit = 3
@@ -121,7 +121,7 @@ struct MessageTests: AppTests {
                 user: currentUser,
                 anotherUser: anotherUser,
                 messageDetails: messageDetails,
-                app: app
+                db: app.db
             )
             
             let expectedMessageResponses = messageDetails
@@ -166,7 +166,7 @@ struct MessageTests: AppTests {
                 user: currentUser,
                 anotherUser: anotherUser,
                 messageDetails: messageDetails,
-                app: app
+                db: app.db
             )
             
             let expectedMessageResponses = messageDetails
@@ -238,7 +238,7 @@ struct MessageTests: AppTests {
                 user: currentUser,
                 anotherUser: anotherUser,
                 messageDetails: [],
-                app: app
+                db: app.db
             )
             let nonExistedMessageID = 1
             
@@ -266,7 +266,7 @@ struct MessageTests: AppTests {
                 user: currentUser,
                 anotherUser: anotherUser,
                 messageDetails: messageDetails,
-                app: app
+                db: app.db
             )
             let untilMessageID = 3
             
@@ -297,7 +297,7 @@ struct MessageTests: AppTests {
             try await createContact(
                 user: currentUser,
                 anotherUser: anotherUser,
-                app: app
+                db: app.db
             )
             
             let url = "ws://localhost:\(port)/\(messageAPIPath("channel"))"
@@ -343,20 +343,20 @@ struct MessageTests: AppTests {
     private func createContact(user: User,
                                anotherUser: User,
                                messageDetails: [MessageDetail] = [],
-                               app: Application) async throws -> Contact {
+                               db: Database) async throws -> Contact {
         let contact = try Contact(id: contactID, userID1: user.requireID(), userID2: anotherUser.requireID())
-        try await contact.create(on: app.db)
+        try await contact.create(on: db)
         
         let pendingMessages = messageDetails.map {
             Message(id: $0.id, contactID: contactID, senderID: $0.senderID, text: $0.text, isRead: $0.isRead)
         }
-        try await contact.$messages.create(pendingMessages, on: app.db)
+        try await contact.$messages.create(pendingMessages, on: db)
         
-        let messages = try await contact.$messages.get(on: app.db)
+        let messages = try await contact.$messages.get(on: db)
         for i in 0..<messages.count {
             let message = messages[i]
             message.createdAt = messageDetails[i].createdAt
-            try await message.update(on: app.db)
+            try await message.update(on: db)
         }
         
         return contact
