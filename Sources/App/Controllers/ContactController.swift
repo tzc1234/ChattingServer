@@ -172,7 +172,7 @@ private extension Contact {
                     avatarDirectoryPath: avatarDirectoryPath
                 ),
             blockedByUserID: $blockedBy.id,
-            unreadMessageCount: await contactRepository.unreadMessagesCountFor(userID: currentUserID, self),
+            unreadMessageCount: await contactRepository.unreadMessagesCountFor(self, senderIsNot: currentUserID),
             lastUpdate: lastUpdate
         )
     }

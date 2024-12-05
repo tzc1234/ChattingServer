@@ -87,7 +87,7 @@ actor ContactRepository {
         try await contact.$messages.query(on: database).max(\.$createdAt) ?? contact.createdAt
     }
     
-    func unreadMessagesCountFor(userID: Int, _ contact: Contact) async throws -> Int {
+    func unreadMessagesCountFor(_ contact: Contact, senderIsNot userID: Int) async throws -> Int {
         try await contact.$messages.query(on: database)
             .filter(\.$isRead == false)
             .filter(\.$sender.$id != userID)

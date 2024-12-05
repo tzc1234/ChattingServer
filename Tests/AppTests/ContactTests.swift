@@ -551,7 +551,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             id: try contact.requireID(),
             responder: anotherUser.toResponse(app: app, avatarDirectoryPath: testAvatarDirectoryPath),
             blockedByUserID: nil,
-            unreadMessageCount: try await repository.unreadMessagesCountFor(userID: user.id!, contact),
+            unreadMessageCount: try await repository.unreadMessagesCountFor(contact, senderIsNot: user.id!),
             lastUpdate: try await repository.lastUpdateFrom(contact)!
         )
     }
