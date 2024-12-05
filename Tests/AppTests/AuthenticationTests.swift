@@ -260,7 +260,7 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
                          afterShutdown: () throws -> Void = {}) async throws {
         try await withApp(
             avatarFilename: { _ in testAvatarFileName },
-            avatarDirectoryPath: { testAvatarDirectoryPath },
+            avatarDirectoryPath: testAvatarDirectoryPath,
             webSocketStore: WebSocketStore(),
             test,
             afterShutdown: afterShutdown

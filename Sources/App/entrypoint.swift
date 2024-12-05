@@ -24,13 +24,12 @@ enum Entrypoint {
         // app.logger.debug("Tried to install SwiftNIO's EventLoopGroup as Swift's global concurrency executor", metadata: ["success": .stringConvertible(executorTakeoverSuccess)])
         
         let avatarDirectory = app.directory.publicDirectory + Constants.AVATARS_DIRECTORY
-        
         do {
             try await configure(app)
             try routes(
                 app,
                 avatarFilename: { "\(Date().timeIntervalSince1970)_\($0)" },
-                avatarDirectoryPath: { avatarDirectory },
+                avatarDirectoryPath: avatarDirectory,
                 webSocketStore: dependenciesContainer.webSocketStore
             )
         } catch {

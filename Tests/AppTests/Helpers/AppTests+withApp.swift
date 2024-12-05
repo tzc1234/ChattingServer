@@ -7,7 +7,7 @@ extension AppTests {
     func withApp(_ test: (Application) async throws -> ()) async throws {
         try await withApp(
             avatarFilename: { $0 },
-            avatarDirectoryPath: { "avatarDirectory" },
+            avatarDirectoryPath: "/avatarDirectory",
             webSocketStore: WebSocketStore(),
             test
         )
@@ -15,7 +15,7 @@ extension AppTests {
     
     func withApp(eventLoopGroup: EventLoopGroup? = nil,
                  avatarFilename: @escaping @Sendable (String) -> (String),
-                 avatarDirectoryPath: @escaping @Sendable () -> (String),
+                 avatarDirectoryPath: String,
                  webSocketStore: WebSocketStore,
                  _ test: (Application) async throws -> (),
                  afterShutdown: () throws -> Void = {}) async throws {

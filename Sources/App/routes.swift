@@ -3,7 +3,7 @@ import Vapor
 
 func routes(_ app: Application,
             avatarFilename: @escaping @Sendable (String) -> String,
-            avatarDirectoryPath: @escaping @Sendable () -> String,
+            avatarDirectoryPath: String,
             webSocketStore: WebSocketStore) throws {
     app.get { req async in
         "It works!"
@@ -19,7 +19,7 @@ func routes(_ app: Application,
         filename: avatarFilename,
         directoryPath: avatarDirectoryPath
     )
-    let avatarLinkLoader = try AvatarLinkLoader(application: app, directoryPath: avatarDirectoryPath())
+    let avatarLinkLoader = try AvatarLinkLoader(application: app, directoryPath: avatarDirectoryPath)
     
     try app.group("api", "v1") { routes in
         try routes.register(collection: AuthenticationController(

@@ -333,7 +333,7 @@ struct MessageTests: AppTests {
         try await withApp(
             eventLoopGroup: eventLoopGroup,
             avatarFilename: { _ in "any-filename.png" },
-            avatarDirectoryPath: { "/anyPath" },
+            avatarDirectoryPath: "/anyPath",
             webSocketStore: WebSocketStore(),
             test
         )

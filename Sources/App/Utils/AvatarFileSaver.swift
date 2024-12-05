@@ -5,9 +5,9 @@ import NIOCore
 actor AvatarFileSaver {
     private let application: Application
     private let filename: (String) -> (String)
-    private let directoryPath: () -> (String)
+    private let directoryPath: String
     
-    init(application: Application, filename: @escaping (String) -> String, directoryPath: @escaping () -> String) {
+    init(application: Application, filename: @escaping (String) -> String, directoryPath: String) {
         self.application = application
         self.filename = filename
         self.directoryPath = directoryPath
@@ -33,7 +33,6 @@ actor AvatarFileSaver {
         }
         
         let avatarFilename = self.filename(filename)
-        let directoryPath = directoryPath()
         if !FileManager.default.fileExists(atPath: directoryPath) {
             try FileManager.default.createDirectory(
                 atPath: directoryPath,
