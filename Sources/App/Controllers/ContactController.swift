@@ -148,7 +148,7 @@ struct ContactController: RouteCollection {
 private extension Contact {
     func toResponse(currentUserID: Int,
                     contactRepository: ContactRepository,
-                    avatarLink: (String?) -> String?) async throws -> ContactResponse {
+                    avatarLink: (String?) async -> String?) async throws -> ContactResponse {
         guard let lastUpdate = try await contactRepository.lastUpdateFrom(self) else {
             throw ContactError.databaseError
         }
@@ -174,7 +174,7 @@ private extension Contact {
 private extension [Contact] {
     func toResponse(currentUserID: Int,
                     contactRepository: ContactRepository,
-                    avatarLink: (String?) -> String?) async throws -> ContactsResponse {
+                    avatarLink: (String?) async -> String?) async throws -> ContactsResponse {
         var contactResponses = [ContactResponse]()
         for contact in self {
             contactResponses.append(try await contact.toResponse(

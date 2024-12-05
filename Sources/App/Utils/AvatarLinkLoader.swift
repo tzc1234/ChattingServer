@@ -15,7 +15,7 @@ actor AvatarLinkLoader {
         self.directoryPath = directoryPath
     }
     
-    nonisolated func get(filename: String?) -> String? {
+    func get(filename: String?) async -> String? {
         guard let filename else { return nil }
         guard FileManager.default.fileExists(atPath: directoryPath + filename) else { return nil }
         

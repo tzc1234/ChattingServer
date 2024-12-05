@@ -85,7 +85,7 @@ struct AuthenticationController: RouteCollection, Sendable {
     
     private func newTokenResponse(for user: User, req: Request) async throws -> TokenResponse {
         let (accessToken, refreshToken) = try await newTokens(for: user, req: req)
-        return TokenResponse(
+        return await TokenResponse(
             user: user.toResponse(avatarLink: avatarLinkLoader.get),
             accessToken: accessToken,
             refreshToken: refreshToken
@@ -110,6 +110,6 @@ struct AuthenticationController: RouteCollection, Sendable {
             throw AuthenticationError.userNotFound
         }
         
-        return user.toResponse(avatarLink: avatarLinkLoader.get)
+        return await user.toResponse(avatarLink: avatarLinkLoader.get)
     }
 }

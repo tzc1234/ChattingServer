@@ -37,7 +37,7 @@ final class User: Model, @unchecked Sendable {
 }
 
 extension User {
-    func toResponse(avatarLink: (_ filename: String?) -> String?) -> UserResponse {
-        UserResponse(id: id, name: name, email: email, avatarURL: avatarLink(avatarFilename))
+    func toResponse(avatarLink: (String?) async -> String?) async -> UserResponse {
+        UserResponse(id: id, name: name, email: email, avatarURL: await avatarLink(avatarFilename))
     }
 }
