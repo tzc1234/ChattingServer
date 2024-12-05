@@ -1,12 +1,14 @@
 import Fluent
 import Vapor
-import SQLKit
 
 struct ContactController: RouteCollection {
     private var defaultLimit: Int { 20 }
+    
+    private let contactRepository: ContactRepository
     private let avatarDirectoryPath: @Sendable () -> (String)
     
-    init(avatarDirectoryPath: @escaping @Sendable () -> String) {
+    init(contactRepository: ContactRepository, avatarDirectoryPath: @escaping @Sendable () -> String) {
+        self.contactRepository = contactRepository
         self.avatarDirectoryPath = avatarDirectoryPath
     }
     
@@ -39,44 +41,11 @@ struct ContactController: RouteCollection {
                                   before: Date? = nil,
                                   limit: Int? = nil,
                                   req: Request) async throws -> ContactsResponse {
-        guard let sql = req.db as? SQLDatabase else {
-            throw ContactError.databaseError
-        }
-        
-        let contactTable = SQLQualifiedTable(Contact.schema, space: Contact.space)
-        let messageTable = SQLQualifiedTable(Message.schema, space: Message.space)
-        
-        let contactIDColumn = SQLColumn(SQLLiteral.string("id"), table: contactTable)
-        let currentUserIDNumeric = SQLLiteral.numeric("\(currentUserID)")
-        
-        let createdAtLiteral = SQLLiteral.string("created_at")
-        let messageCreatedAtColumn = SQLColumn(createdAtLiteral, table: messageTable)
-        let contactCreatedAtColumn = SQLColumn(createdAtLiteral, table: contactTable)
-        let maxMessageCreatedAtFunction = SQLFunction("max", args: messageCreatedAtColumn)
-        let ifNullCreatedAtFunction = SQLFunction("ifnull", args: maxMessageCreatedAtFunction, contactCreatedAtColumn)
-        
-        var query = sql.select()
-            .column(SQLColumn(SQLLiteral.all, table: contactTable))
-            .column(ifNullCreatedAtFunction, as: "last_update")
-            .from(contactTable)
-            .join(
-                messageTable,
-                method: SQLJoinMethod.left,
-                on: contactIDColumn,
-                .equal,
-                SQLColumn(SQLLiteral.string("contact_id"), table: messageTable)
-            )
-            .groupBy(contactIDColumn)
-        
-        before.map { query = query.having("last_update", .lessThan, $0) }
-        
-        query = query
-            .having(SQLColumn(SQLLiteral.string("user_id1"), table: contactTable), .equal, currentUserIDNumeric)
-            .orHaving(SQLColumn(SQLLiteral.string("user_id2"), table: contactTable), .equal, currentUserIDNumeric)
-            .orderBy("last_update", .descending)
-            .limit(limit ?? defaultLimit)
-        
-        let contacts = try await query.all().map { try $0.decode(fluentModel: Contact.self) }
+        let contacts = try await contactRepository.getContacts(
+            for: currentUserID,
+            before: before,
+            limit: limit ?? defaultLimit
+        )
         return try await contacts.toResponse(
             currentUserID: currentUserID,
             req: req,

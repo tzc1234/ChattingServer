@@ -9,8 +9,10 @@ func routes(_ app: Application,
         "It works!"
     }
     
-    let userRepository = UserRepository(database: app.db)
-    let refreshTokenRepository = RefreshTokenRepository(database: app.db)
+    let db = app.db
+    let userRepository = UserRepository(database: db)
+    let refreshTokenRepository = RefreshTokenRepository(database: db)
+    let contactRepository = ContactRepository(database: db)
     
     try app.group("api", "v1") { routes in
         try routes.register(collection: AuthenticationController(
@@ -19,7 +21,10 @@ func routes(_ app: Application,
             avatarFilename: avatarFilename,
             avatarDirectoryPath: avatarDirectoryPath)
         )
-        try routes.register(collection: ContactController(avatarDirectoryPath: avatarDirectoryPath))
+        try routes.register(collection: ContactController(
+            contactRepository: contactRepository,
+            avatarDirectoryPath: avatarDirectoryPath
+        ))
         try routes.register(collection: MessageController(webSocketStore: webSocketStore))
     }
 }
