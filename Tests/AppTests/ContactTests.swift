@@ -603,6 +603,10 @@ struct ContactTests: AppTests, AvatarFileHelpers {
 private extension User {
     func toResponse(app: Application, directoryPath: String) async -> UserResponse {
         let loader = try! AvatarLinkLoader(application: app, directoryPath: directoryPath)
-        return await toResponse(avatarLink: loader.get)
+        return await toResponse { [weak loader] filename in
+            guard let filename else { return nil }
+            
+            return await loader?.get(filename: filename)
+        }
     }
 }

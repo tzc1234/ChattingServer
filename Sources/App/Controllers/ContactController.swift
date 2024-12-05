@@ -50,7 +50,11 @@ struct ContactController: RouteCollection {
         return try await contacts.toResponse(
             currentUserID: currentUserID,
             contactRepository: contactRepository,
-            avatarLink: avatarLinkLoader.get
+            avatarLink: { [weak avatarLinkLoader] filename in
+                guard let filename else { return nil }
+                
+                return await avatarLinkLoader?.get(filename: filename)
+            }
         )
     }
     
@@ -140,7 +144,11 @@ struct ContactController: RouteCollection {
         try await contact.toResponse(
             currentUserID: currentUserID,
             contactRepository: contactRepository,
-            avatarLink: avatarLinkLoader.get
+            avatarLink: { [weak avatarLinkLoader] filename in
+                guard let filename else { return nil }
+                
+                return await avatarLinkLoader?.get(filename: filename)
+            }
         )
     }
 }
