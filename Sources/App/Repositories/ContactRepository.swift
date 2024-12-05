@@ -58,6 +58,10 @@ actor ContactRepository {
     private func decodeToContact(_ row: SQLRow) throws -> Contact {
         try row.decode(fluentModel: Contact.self)
     }
+    
+    func create(_ contact: Contact) async throws {
+        try await contact.create(on: database)
+    }
 }
 
 private extension SQLSelectBuilder {

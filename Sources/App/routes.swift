@@ -23,6 +23,7 @@ func routes(_ app: Application,
         )
         try routes.register(collection: ContactController(
             contactRepository: contactRepository,
+            userRepository: userRepository,
             avatarDirectoryPath: avatarDirectoryPath
         ))
         try routes.register(collection: MessageController(webSocketStore: webSocketStore))

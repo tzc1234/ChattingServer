@@ -5,10 +5,14 @@ struct ContactController: RouteCollection {
     private var defaultLimit: Int { 20 }
     
     private let contactRepository: ContactRepository
+    private let userRepository: UserRepository
     private let avatarDirectoryPath: @Sendable () -> (String)
     
-    init(contactRepository: ContactRepository, avatarDirectoryPath: @escaping @Sendable () -> String) {
+    init(contactRepository: ContactRepository,
+         userRepository: UserRepository,
+         avatarDirectoryPath: @escaping @Sendable () -> String) {
         self.contactRepository = contactRepository
+        self.userRepository = userRepository
         self.avatarDirectoryPath = avatarDirectoryPath
     }
     
@@ -68,10 +72,8 @@ struct ContactController: RouteCollection {
     private func newContact(for currentUserID: Int,
                             with responderEmail: String,
                             on db: Database) async throws -> Contact {
-        guard let responder = try await User.query(on: db)
-            .filter(\.$email == responderEmail)
-            .first(), let responderID = try? responder.requireID()
-        else {
+        guard let responder = try await userRepository.findBy(email: responderEmail),
+                let responderID = try? responder.requireID() else {
             throw ContactError.responderNotFound
         }
         
@@ -90,7 +92,7 @@ struct ContactController: RouteCollection {
         } else {
             Contact(userID1: responderID, userID2: currentUserID)
         }
-        try await contact.save(on: db)
+        try await contactRepository.create(contact)
         return contact
     }
     
