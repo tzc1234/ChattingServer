@@ -62,6 +62,18 @@ actor ContactRepository {
     func create(_ contact: Contact) async throws {
         try await contact.create(on: database)
     }
+    
+    func update(_ contact: Contact) async throws {
+        try await contact.update(on: database)
+    }
+    
+    func findBy(id: Int, userID: Int) async throws -> Contact? {
+        try await Contact.query(on: database)
+            .filter(by: userID)
+            .filter(\.$id == id)
+            .with(\.$blockedBy)
+            .first()
+    }
 }
 
 private extension SQLSelectBuilder {
@@ -69,5 +81,13 @@ private extension SQLSelectBuilder {
         guard let date else { return self }
         
         return having(column, .lessThan, date)
+    }
+}
+
+extension QueryBuilder<Contact> {
+    func filter(by userID: Int) -> Self {
+        group(.or, { group in
+            group.filter(\.$user1.$id == userID).filter(\.$user2.$id == userID)
+        })
     }
 }

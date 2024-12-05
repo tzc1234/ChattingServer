@@ -101,7 +101,7 @@ struct ContactController: RouteCollection {
         let contactID = try extractContactID(from: req.parameters)
         let currentUserID = try req.auth.require(Payload.self).userID
         
-        guard let contact = try await getContact(for: currentUserID, contactID: contactID, req: req) else {
+        guard let contact = try await contactRepository.findBy(id: contactID, userID: currentUserID) else {
             throw ContactError.contactNotFound
         }
         
@@ -110,7 +110,7 @@ struct ContactController: RouteCollection {
         }
         
         contact.$blockedBy.id = currentUserID
-        try await contact.update(on: req.db)
+        try await contactRepository.update(contact)
         
         return try await contact.toResponse(
             currentUserID: currentUserID,
@@ -123,7 +123,7 @@ struct ContactController: RouteCollection {
         let contactID = try extractContactID(from: req.parameters)
         let currentUserID = try req.auth.require(Payload.self).userID
         
-        guard let contact = try await getContact(for: currentUserID, contactID: contactID, req: req) else {
+        guard let contact = try await contactRepository.findBy(id: contactID, userID: currentUserID) else {
             throw ContactError.contactNotFound
         }
         
@@ -136,7 +136,7 @@ struct ContactController: RouteCollection {
         }
         
         contact.$blockedBy.id = nil
-        try await contact.update(on: req.db)
+        try await contactRepository.update(contact)
         
         return try await contact.toResponse(
             currentUserID: currentUserID,
@@ -151,14 +151,6 @@ struct ContactController: RouteCollection {
         }
         
         return contactID
-    }
-    
-    private func getContact(for currentUserID: Int, contactID: Int, req: Request) async throws -> Contact? {
-        try await Contact.query(on: req.db)
-            .filter(by: currentUserID)
-            .filter(\.$id == contactID)
-            .with(\.$blockedBy)
-            .first()
     }
 }
 

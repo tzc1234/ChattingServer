@@ -47,11 +47,3 @@ extension Contact {
         try await $messages.query(on: db).max(\.$createdAt) ?? createdAt
     }
 }
-
-extension QueryBuilder<Contact> {
-    func filter(by userID: Int) -> Self {
-        group(.or, { group in
-            group.filter(\.$user1.$id == userID).filter(\.$user2.$id == userID)
-        })
-    }
-}
