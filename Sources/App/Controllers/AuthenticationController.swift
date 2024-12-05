@@ -3,20 +3,17 @@ import Vapor
 struct AuthenticationController: RouteCollection, Sendable {
     private let userRepository: UserRepository
     private let refreshTokenRepository: RefreshTokenRepository
+    private let avatarFileSaver: AvatarFileSaver
     private let avatarLinkLoader: AvatarLinkLoader
-    private let avatarFilename: @Sendable (String) -> (String)
-    private let avatarDirectoryPath: @Sendable () -> (String)
     
     init(userRepository: UserRepository,
          refreshTokenRepository: RefreshTokenRepository,
-         avatarLinkLoader: AvatarLinkLoader,
-         avatarFilename: @escaping @Sendable (String) -> String,
-         avatarDirectoryPath: @escaping @Sendable () -> String) {
+         avatarFileSaver: AvatarFileSaver,
+         avatarLinkLoader: AvatarLinkLoader) {
         self.userRepository = userRepository
         self.refreshTokenRepository = refreshTokenRepository
+        self.avatarFileSaver = avatarFileSaver
         self.avatarLinkLoader = avatarLinkLoader
-        self.avatarFilename = avatarFilename
-        self.avatarDirectoryPath = avatarDirectoryPath
     }
     
     func boot(routes: RoutesBuilder) throws {
@@ -37,25 +34,13 @@ struct AuthenticationController: RouteCollection, Sendable {
         
         var savedAvatarFilename: String?
         if let avatar = request.avatar {
-            let filename = avatar.filename
-            if !(filename.lowercased().hasSuffix(".jpg") ||
-                 filename.lowercased().hasSuffix(".jpeg") ||
-                 filename.lowercased().hasSuffix(".png")) {
-                throw Abort(.unsupportedMediaType, reason: "Only accept .jpg, .jpeg, or .png files.")
+            do {
+                savedAvatarFilename = try await avatarFileSaver.save(avatar)
+            } catch let error as AvatarFileSaver.Error {
+                throw Abort(.unsupportedMediaType, reason: error.reason)
+            } catch {
+                throw error
             }
-            
-            let avatarFilename = avatarFilename(filename)
-            let directoryPath = avatarDirectoryPath()
-            if !FileManager.default.fileExists(atPath: directoryPath) {
-                try FileManager.default.createDirectory(
-                    atPath: directoryPath,
-                    withIntermediateDirectories: true,
-                    attributes: nil
-                )
-            }
-            try await req.fileio.writeFile(avatar.data, at: directoryPath + avatarFilename)
-            
-            savedAvatarFilename = avatarFilename
         }
         
         let user = request.toModel()

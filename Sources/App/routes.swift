@@ -14,16 +14,20 @@ func routes(_ app: Application,
     let refreshTokenRepository = RefreshTokenRepository(database: db)
     let contactRepository = ContactRepository(database: db)
     
+    let avatarFileSaver = AvatarFileSaver(
+        application: app,
+        filename: avatarFilename,
+        directoryPath: avatarDirectoryPath
+    )
     let avatarLinkLoader = try AvatarLinkLoader(application: app, directoryPath: avatarDirectoryPath())
     
     try app.group("api", "v1") { routes in
         try routes.register(collection: AuthenticationController(
             userRepository: userRepository,
             refreshTokenRepository: refreshTokenRepository,
-            avatarLinkLoader: avatarLinkLoader,
-            avatarFilename: avatarFilename,
-            avatarDirectoryPath: avatarDirectoryPath)
-        )
+            avatarFileSaver: avatarFileSaver,
+            avatarLinkLoader: avatarLinkLoader
+        ))
         try routes.register(collection: ContactController(
             contactRepository: contactRepository,
             userRepository: userRepository,
