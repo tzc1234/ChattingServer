@@ -28,7 +28,7 @@ actor ContactRepository {
         let ifNullCreatedAtFunction = SQLFunction("ifnull", args: maxMessageCreatedAtFunction, contactCreatedAtColumn)
         let lastUpdate = "last_update"
         
-        var query = try sqlDatabase().select()
+        return try await sqlDatabase().select()
             .column(SQLColumn(SQLLiteral.all, table: contactTable))
             .column(ifNullCreatedAtFunction, as: lastUpdate)
             .from(contactTable)
@@ -40,22 +40,30 @@ actor ContactRepository {
                 messageContactIDColumn
             )
             .groupBy(contactIDColumn)
-        
-        before.map { query = query.having(lastUpdate, .lessThan, $0) }
-        
-        query = query
+            .having(lastUpdate, lessThan: before)
             .having(SQLColumn(SQLLiteral.string("user_id1"), table: contactTable), .equal, currentUserIDNumeric)
             .orHaving(SQLColumn(SQLLiteral.string("user_id2"), table: contactTable), .equal, currentUserIDNumeric)
             .orderBy(lastUpdate, .descending)
             .limit(limit)
-        
-        return try await query.all()
-            .map { try $0.decode(fluentModel: Contact.self) }
+            .all()
+            .map(decodeToContact)
     }
     
     private func sqlDatabase() throws(Error) -> SQLDatabase {
         guard let sql = database as? SQLDatabase else { throw .databaseConversion }
         
         return sql
+    }
+    
+    private func decodeToContact(_ row: SQLRow) throws -> Contact {
+        try row.decode(fluentModel: Contact.self)
+    }
+}
+
+private extension SQLSelectBuilder {
+    func having(_ column: String, lessThan date: Date?) -> SQLSelectBuilder {
+        guard let date else { return self }
+        
+        return having(column, .lessThan, date)
     }
 }
