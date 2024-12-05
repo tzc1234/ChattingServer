@@ -30,10 +30,10 @@ struct AuthenticationController: RouteCollection, Sendable {
     @Sendable
     private func register(req: Request) async throws -> TokenResponse {
         try RegisterRequest.validate(content: req)
-        let request = try req.content.decode(RegisterRequest.self)
+        let registerRequest = try req.content.decode(RegisterRequest.self)
         
         var savedAvatarFilename: String?
-        if let avatar = request.avatar {
+        if let avatar = registerRequest.avatar {
             do {
                 savedAvatarFilename = try await avatarFileSaver.save(avatar)
             } catch let error as AvatarFileSaver.Error {
@@ -43,7 +43,7 @@ struct AuthenticationController: RouteCollection, Sendable {
             }
         }
         
-        let user = request.toModel()
+        let user = registerRequest.toUserModel()
         user.password = try await req.password.async.hash(user.password)
         user.avatarFilename = savedAvatarFilename
         try await userRepository.create(user)
@@ -55,8 +55,7 @@ struct AuthenticationController: RouteCollection, Sendable {
     private func login(req: Request) async throws -> TokenResponse {
         let loginRequest = try req.content.decode(LoginRequest.self)
         guard let user = try await userRepository.findBy(email: loginRequest.email),
-                try await req.password.async.verify(loginRequest.password, created: user.password)
-        else {
+                try await req.password.async.verify(loginRequest.password, created: user.password) else {
             throw AuthenticationError.userNotFound
         }
         
@@ -71,20 +70,19 @@ struct AuthenticationController: RouteCollection, Sendable {
         let hashedRefreshToken = SHA256.hash(refreshRequest.refreshToken)
         
         guard let refreshToken = try await refreshTokenRepository.findBy(token: hashedRefreshToken),
-                refreshToken.expiresAt > .now
-        else {
+                refreshToken.expiresAt > .now else {
             throw AuthenticationError.refreshTokenInvalid
         }
         
         let user = try await refreshTokenRepository.getUserFrom(refreshToken)
         try await refreshTokenRepository.delete(refreshToken)
         
-        let (newAccessToken, newRefreshToken) = try await newTokens(for: user, req: req)
+        let (newAccessToken, newRefreshToken) = try await generateNewTokens(for: user, req: req)
         return RefreshTokenResponse(accessToken: newAccessToken, refreshToken: newRefreshToken)
     }
     
     private func newTokenResponse(for user: User, req: Request) async throws -> TokenResponse {
-        let (accessToken, refreshToken) = try await newTokens(for: user, req: req)
+        let (accessToken, refreshToken) = try await generateNewTokens(for: user, req: req)
         return await TokenResponse(
             user: user.toResponse { [weak avatarLinkLoader] filename in
                 guard let filename else { return nil }
@@ -96,7 +94,8 @@ struct AuthenticationController: RouteCollection, Sendable {
         )
     }
     
-    private func newTokens(for user: User, req: Request) async throws -> (accessToken: String, refreshToken: String) {
+    private func generateNewTokens(for user: User,
+                                   req: Request) async throws -> (accessToken: String, refreshToken: String) {
         let accessToken = try await req.jwt.sign(Payload(for: user))
         
         let token = RandomGenerator.generate(bytes: 32)

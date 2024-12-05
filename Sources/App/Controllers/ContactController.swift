@@ -61,13 +61,12 @@ struct ContactController: RouteCollection {
     @Sendable
     private func create(req: Request) async throws -> ContactResponse {
         let currentUserID = try req.auth.require(Payload.self).userID
-        let contactRequest = try req.content.decode(ContactRequest.self)
-        let contact = try await newContact(for: currentUserID, with: contactRequest.responderEmail)
-        return try await response(with: contact, currentUserID: currentUserID)
+        let responderEmail = try req.content.decode(ContactRequest.self).responderEmail
+        let contact = try await contact(for: currentUserID, with: responderEmail)
+        return try await contactResponse(with: contact, currentUserID: currentUserID)
     }
     
-    private func newContact(for currentUserID: Int,
-                            with responderEmail: String) async throws -> Contact {
+    private func contact(for currentUserID: Int, with responderEmail: String) async throws -> Contact {
         guard let responder = try await userRepository.findBy(email: responderEmail),
                 let responderID = try? responder.requireID() else {
             throw ContactError.responderNotFound
@@ -77,11 +76,10 @@ struct ContactController: RouteCollection {
             throw ContactError.responderSameAsCurrentUser
         }
         
-        return try await saveNewContact(with: currentUserID, and: responderID)
+        return try await createNewContact(with: currentUserID, and: responderID)
     }
     
-    private func saveNewContact(with currentUserID: Int,
-                                and responderID: Int) async throws -> Contact {
+    private func createNewContact(with currentUserID: Int, and responderID: Int) async throws -> Contact {
         let contact = if currentUserID < responderID {
             Contact(userID1: currentUserID, userID2: responderID)
         } else {
@@ -107,7 +105,7 @@ struct ContactController: RouteCollection {
         contact.$blockedBy.id = currentUserID
         try await contactRepository.update(contact)
         
-        return try await response(with: contact, currentUserID: currentUserID)
+        return try await contactResponse(with: contact, currentUserID: currentUserID)
     }
     
     @Sendable func unblock(req: Request) async throws -> ContactResponse {
@@ -129,7 +127,7 @@ struct ContactController: RouteCollection {
         contact.$blockedBy.id = nil
         try await contactRepository.update(contact)
         
-        return try await response(with: contact, currentUserID: currentUserID)
+        return try await contactResponse(with: contact, currentUserID: currentUserID)
     }
     
     private func extractContactID(from parameters: Parameters) throws -> Int {
@@ -140,7 +138,7 @@ struct ContactController: RouteCollection {
         return contactID
     }
     
-    private func response(with contact: Contact, currentUserID: Int) async throws -> ContactResponse {
+    private func contactResponse(with contact: Contact, currentUserID: Int) async throws -> ContactResponse {
         try await contact.toResponse(
             currentUserID: currentUserID,
             contactRepository: contactRepository,
@@ -157,7 +155,7 @@ private extension Contact {
     func toResponse(currentUserID: Int,
                     contactRepository: ContactRepository,
                     avatarLink: (String?) async -> String?) async throws -> ContactResponse {
-        guard let lastUpdate = try await contactRepository.lastUpdateFrom(self) else {
+        guard let lastUpdate = try await contactRepository.lastUpdateFor(self) else {
             throw ContactError.databaseError
         }
         
@@ -172,9 +170,9 @@ private extension Contact {
     
     private func responder(by currentUserID: Int, on contactRepository: ContactRepository) async throws -> User {
         if $user1.id != currentUserID {
-            try await contactRepository.getUser1From(self)
+            try await contactRepository.getUser1For(self)
         } else {
-            try await contactRepository.getUser2From(self)
+            try await contactRepository.getUser2For(self)
         }
     }
 }

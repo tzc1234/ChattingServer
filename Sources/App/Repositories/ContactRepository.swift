@@ -17,6 +17,7 @@ actor ContactRepository {
         let contactTable = SQLQualifiedTable(Contact.schema, space: Contact.space)
         let messageTable = SQLQualifiedTable(Message.schema, space: Message.space)
         
+        let contactAllColumns = SQLColumn(SQLLiteral.all, table: contactTable)
         let contactIDColumn = SQLColumn(SQLLiteral.string("id"), table: contactTable)
         let messageContactIDColumn = SQLColumn(SQLLiteral.string("contact_id"), table: messageTable)
         let currentUserIDNumeric = SQLLiteral.numeric("\(currentUserID)")
@@ -25,12 +26,16 @@ actor ContactRepository {
         let messageCreatedAtColumn = SQLColumn(createdAtLiteral, table: messageTable)
         let contactCreatedAtColumn = SQLColumn(createdAtLiteral, table: contactTable)
         let maxMessageCreatedAtFunction = SQLFunction("max", args: messageCreatedAtColumn)
-        let ifNullCreatedAtFunction = SQLFunction("ifnull", args: maxMessageCreatedAtFunction, contactCreatedAtColumn)
+        let maxMessageCreatedAtFallbackToContactCreatedAtFunction = SQLFunction("ifnull",
+            args: maxMessageCreatedAtFunction, contactCreatedAtColumn
+        )
         let lastUpdate = "last_update"
+        let contactUserID1Column = SQLColumn(SQLLiteral.string("user_id1"), table: contactTable)
+        let contactUserID2Column = SQLColumn(SQLLiteral.string("user_id2"), table: contactTable)
         
         return try await sqlDatabase().select()
-            .column(SQLColumn(SQLLiteral.all, table: contactTable))
-            .column(ifNullCreatedAtFunction, as: lastUpdate)
+            .column(contactAllColumns)
+            .column(maxMessageCreatedAtFallbackToContactCreatedAtFunction, as: lastUpdate)
             .from(contactTable)
             .join(
                 messageTable,
@@ -41,8 +46,8 @@ actor ContactRepository {
             )
             .groupBy(contactIDColumn)
             .having(lastUpdate, lessThan: before)
-            .having(SQLColumn(SQLLiteral.string("user_id1"), table: contactTable), .equal, currentUserIDNumeric)
-            .orHaving(SQLColumn(SQLLiteral.string("user_id2"), table: contactTable), .equal, currentUserIDNumeric)
+            .having(contactUserID1Column, .equal, currentUserIDNumeric)
+            .orHaving(contactUserID2Column, .equal, currentUserIDNumeric)
             .orderBy(lastUpdate, .descending)
             .limit(limit)
             .all()
@@ -75,15 +80,15 @@ actor ContactRepository {
             .first()
     }
     
-    func getUser1From(_ contact: Contact) async throws -> User {
+    func getUser1For(_ contact: Contact) async throws -> User {
         try await contact.$user1.get(on: database)
     }
     
-    func getUser2From(_ contact: Contact) async throws -> User {
+    func getUser2For(_ contact: Contact) async throws -> User {
         try await contact.$user2.get(on: database)
     }
     
-    func lastUpdateFrom(_ contact: Contact) async throws -> Date? {
+    func lastUpdateFor(_ contact: Contact) async throws -> Date? {
         try await contact.$messages.query(on: database).max(\.$createdAt) ?? contact.createdAt
     }
     

@@ -552,7 +552,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             responder: anotherUser.toResponse(app: app, directoryPath: testAvatarDirectoryPath),
             blockedByUserID: nil,
             unreadMessageCount: try await repository.unreadMessagesCountFor(contact, senderIsNot: user.id!),
-            lastUpdate: try await repository.lastUpdateFrom(contact)!
+            lastUpdate: try await repository.lastUpdateFor(contact)!
         )
     }
     
