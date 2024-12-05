@@ -545,17 +545,15 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             messageDetails: messageDetails,
             app: app
         )
+        let repository = ContactRepository(database: app.db)
+        
         return ContactResponse(
             id: try contact.requireID(),
             responder: anotherUser.toResponse(app: app, avatarDirectoryPath: testAvatarDirectoryPath),
             blockedByUserID: nil,
-            unreadMessageCount: try await contact.unreadMessagesCount(currentUserID: user.requireID(), db: app.db),
-            lastUpdate: try await lastUpdate(from: contact, on: app.db)
+            unreadMessageCount: try await repository.unreadMessagesCountFor(userID: user.id!, contact),
+            lastUpdate: try await repository.lastUpdateFrom(contact)!
         )
-    }
-    
-    private func lastUpdate(from contact: Contact, on db: Database) async throws -> Date {
-        try await contact.$messages.query(on: db).max(\.$createdAt) ?? contact.createdAt!
     }
     
     private func createContact(id: Int? = nil,

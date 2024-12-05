@@ -51,9 +51,9 @@ struct ContactController: RouteCollection {
         )
         return try await contacts.toResponse(
             currentUserID: currentUserID,
-            req: req,
             contactRepository: contactRepository,
-            avatarDirectoryPath: avatarDirectoryPath()
+            avatarDirectoryPath: avatarDirectoryPath(),
+            app: req.application
         )
     }
     
@@ -64,9 +64,9 @@ struct ContactController: RouteCollection {
         let contact = try await newContact(for: currentUserID, with: contactRequest.responderEmail)
         return try await contact.toResponse(
             currentUserID: currentUserID,
-            req: req,
             contactRepository: contactRepository,
-            avatarDirectoryPath: avatarDirectoryPath()
+            avatarDirectoryPath: avatarDirectoryPath(),
+            app: req.application
         )
     }
     
@@ -113,9 +113,9 @@ struct ContactController: RouteCollection {
         
         return try await contact.toResponse(
             currentUserID: currentUserID,
-            req: req,
             contactRepository: contactRepository,
-            avatarDirectoryPath: avatarDirectoryPath()
+            avatarDirectoryPath: avatarDirectoryPath(),
+            app: req.application
         )
     }
     
@@ -140,9 +140,9 @@ struct ContactController: RouteCollection {
         
         return try await contact.toResponse(
             currentUserID: currentUserID,
-            req: req,
             contactRepository: contactRepository,
-            avatarDirectoryPath: avatarDirectoryPath()
+            avatarDirectoryPath: avatarDirectoryPath(),
+            app: req.application
         )
     }
     
@@ -157,10 +157,10 @@ struct ContactController: RouteCollection {
 
 private extension Contact {
     func toResponse(currentUserID: Int,
-                    req: Request,
                     contactRepository: ContactRepository,
-                    avatarDirectoryPath: String) async throws -> ContactResponse {
-        guard let lastUpdate = try await contactRepository.getLastUpdateFrom(self) else {
+                    avatarDirectoryPath: String,
+                    app: Application) async throws -> ContactResponse {
+        guard let lastUpdate = try await contactRepository.lastUpdateFrom(self) else {
             throw ContactError.databaseError
         }
         
@@ -168,11 +168,11 @@ private extension Contact {
             id: requireID(),
             responder: await getResponder(by: currentUserID, on: contactRepository)
                 .toResponse(
-                    app: req.application,
+                    app: app,
                     avatarDirectoryPath: avatarDirectoryPath
                 ),
             blockedByUserID: $blockedBy.id,
-            unreadMessageCount: await unreadMessagesCount(currentUserID: currentUserID, db: req.db),
+            unreadMessageCount: await contactRepository.unreadMessagesCountFor(userID: currentUserID, self),
             lastUpdate: lastUpdate
         )
     }
@@ -188,16 +188,16 @@ private extension Contact {
 
 private extension [Contact] {
     func toResponse(currentUserID: Int,
-                    req: Request,
                     contactRepository: ContactRepository,
-                    avatarDirectoryPath: String) async throws -> ContactsResponse {
+                    avatarDirectoryPath: String,
+                    app: Application) async throws -> ContactsResponse {
         var contactResponses = [ContactResponse]()
         for contact in self {
             contactResponses.append(try await contact.toResponse(
                 currentUserID: currentUserID,
-                req: req,
                 contactRepository: contactRepository,
-                avatarDirectoryPath: avatarDirectoryPath
+                avatarDirectoryPath: avatarDirectoryPath,
+                app: app
             ))
         }
         return ContactsResponse(contacts: contactResponses)

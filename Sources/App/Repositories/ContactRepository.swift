@@ -75,16 +75,23 @@ actor ContactRepository {
             .first()
     }
     
-    func getLastUpdateFrom(_ contact: Contact) async throws -> Date? {
-        try await contact.$messages.query(on: database).max(\.$createdAt) ?? contact.createdAt
-    }
-    
     func getUser1From(_ contact: Contact) async throws -> User {
         try await contact.$user1.get(on: database)
     }
     
     func getUser2From(_ contact: Contact) async throws -> User {
         try await contact.$user2.get(on: database)
+    }
+    
+    func lastUpdateFrom(_ contact: Contact) async throws -> Date? {
+        try await contact.$messages.query(on: database).max(\.$createdAt) ?? contact.createdAt
+    }
+    
+    func unreadMessagesCountFor(userID: Int, _ contact: Contact) async throws -> Int {
+        try await contact.$messages.query(on: database)
+            .filter(\.$isRead == false)
+            .filter(\.$sender.$id != userID)
+            .count()
     }
 }
 
