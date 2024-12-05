@@ -1,4 +1,3 @@
-import Fluent
 import Vapor
 
 struct ContactController: RouteCollection {
@@ -53,6 +52,7 @@ struct ContactController: RouteCollection {
         return try await contacts.toResponse(
             currentUserID: currentUserID,
             req: req,
+            contactRepository: contactRepository,
             avatarDirectoryPath: avatarDirectoryPath()
         )
     }
@@ -61,17 +61,17 @@ struct ContactController: RouteCollection {
     private func create(req: Request) async throws -> ContactResponse {
         let currentUserID = try req.auth.require(Payload.self).userID
         let contactRequest = try req.content.decode(ContactRequest.self)
-        let contact = try await newContact(for: currentUserID, with: contactRequest.responderEmail, on: req.db)
+        let contact = try await newContact(for: currentUserID, with: contactRequest.responderEmail)
         return try await contact.toResponse(
             currentUserID: currentUserID,
             req: req,
+            contactRepository: contactRepository,
             avatarDirectoryPath: avatarDirectoryPath()
         )
     }
     
     private func newContact(for currentUserID: Int,
-                            with responderEmail: String,
-                            on db: Database) async throws -> Contact {
+                            with responderEmail: String) async throws -> Contact {
         guard let responder = try await userRepository.findBy(email: responderEmail),
                 let responderID = try? responder.requireID() else {
             throw ContactError.responderNotFound
@@ -81,12 +81,11 @@ struct ContactController: RouteCollection {
             throw ContactError.responderSameAsCurrentUser
         }
         
-        return try await saveNewContact(with: currentUserID, and: responderID, on: db)
+        return try await saveNewContact(with: currentUserID, and: responderID)
     }
     
     private func saveNewContact(with currentUserID: Int,
-                                and responderID: Int,
-                                on db: Database) async throws -> Contact {
+                                and responderID: Int) async throws -> Contact {
         let contact = if currentUserID < responderID {
             Contact(userID1: currentUserID, userID2: responderID)
         } else {
@@ -115,6 +114,7 @@ struct ContactController: RouteCollection {
         return try await contact.toResponse(
             currentUserID: currentUserID,
             req: req,
+            contactRepository: contactRepository,
             avatarDirectoryPath: avatarDirectoryPath()
         )
     }
@@ -141,6 +141,7 @@ struct ContactController: RouteCollection {
         return try await contact.toResponse(
             currentUserID: currentUserID,
             req: req,
+            contactRepository: contactRepository,
             avatarDirectoryPath: avatarDirectoryPath()
         )
     }
@@ -155,14 +156,17 @@ struct ContactController: RouteCollection {
 }
 
 private extension Contact {
-    func toResponse(currentUserID: Int, req: Request, avatarDirectoryPath: String) async throws -> ContactResponse {
-        guard let lastUpdate = try await lastUpdate(db: req.db) else {
+    func toResponse(currentUserID: Int,
+                    req: Request,
+                    contactRepository: ContactRepository,
+                    avatarDirectoryPath: String) async throws -> ContactResponse {
+        guard let lastUpdate = try await contactRepository.getLastUpdateFrom(self) else {
             throw ContactError.databaseError
         }
         
         return try ContactResponse(
             id: requireID(),
-            responder: await getResponder(currentUserID: currentUserID, on: req.db)
+            responder: await getResponder(by: currentUserID, on: contactRepository)
                 .toResponse(
                     app: req.application,
                     avatarDirectoryPath: avatarDirectoryPath
@@ -173,22 +177,26 @@ private extension Contact {
         )
     }
     
-    private func getResponder(currentUserID: Int, on db: Database) async throws -> User {
+    private func getResponder(by currentUserID: Int, on contactRepository: ContactRepository) async throws -> User {
         if $user1.id != currentUserID {
-            try await $user1.get(on: db)
+            try await contactRepository.getUser1From(self)
         } else {
-            try await $user2.get(on: db)
+            try await contactRepository.getUser2From(self)
         }
     }
 }
 
 private extension [Contact] {
-    func toResponse(currentUserID: Int, req: Request, avatarDirectoryPath: String) async throws -> ContactsResponse {
+    func toResponse(currentUserID: Int,
+                    req: Request,
+                    contactRepository: ContactRepository,
+                    avatarDirectoryPath: String) async throws -> ContactsResponse {
         var contactResponses = [ContactResponse]()
         for contact in self {
             contactResponses.append(try await contact.toResponse(
                 currentUserID: currentUserID,
                 req: req,
+                contactRepository: contactRepository,
                 avatarDirectoryPath: avatarDirectoryPath
             ))
         }

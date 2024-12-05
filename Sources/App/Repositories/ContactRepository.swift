@@ -74,6 +74,18 @@ actor ContactRepository {
             .with(\.$blockedBy)
             .first()
     }
+    
+    func getLastUpdateFrom(_ contact: Contact) async throws -> Date? {
+        try await contact.$messages.query(on: database).max(\.$createdAt) ?? contact.createdAt
+    }
+    
+    func getUser1From(_ contact: Contact) async throws -> User {
+        try await contact.$user1.get(on: database)
+    }
+    
+    func getUser2From(_ contact: Contact) async throws -> User {
+        try await contact.$user2.get(on: database)
+    }
 }
 
 private extension SQLSelectBuilder {

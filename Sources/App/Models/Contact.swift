@@ -42,8 +42,4 @@ extension Contact {
             .filter(\.$isRead == false)
             .filter(\.$sender.$id != currentUserID)
     }
-    
-    func lastUpdate(db: Database) async throws -> Date? {
-        try await $messages.query(on: db).max(\.$createdAt) ?? createdAt
-    }
 }
