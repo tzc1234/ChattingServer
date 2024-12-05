@@ -5,14 +5,14 @@ struct ContactController: RouteCollection {
     
     private let contactRepository: ContactRepository
     private let userRepository: UserRepository
-    private let avatarDirectoryPath: @Sendable () -> (String)
+    private let avatarLinkLoader: AvatarLinkLoader
     
     init(contactRepository: ContactRepository,
          userRepository: UserRepository,
-         avatarDirectoryPath: @escaping @Sendable () -> String) {
+         avatarLinkLoader: AvatarLinkLoader) {
         self.contactRepository = contactRepository
         self.userRepository = userRepository
-        self.avatarDirectoryPath = avatarDirectoryPath
+        self.avatarLinkLoader = avatarLinkLoader
     }
     
     func boot(routes: RoutesBuilder) throws {
@@ -35,15 +35,13 @@ struct ContactController: RouteCollection {
         return try await contactsResponse(
             for: currentUserID,
             before: indexRequest.before,
-            limit: indexRequest.limit,
-            req: req
+            limit: indexRequest.limit
         )
     }
     
     private func contactsResponse(for currentUserID: Int,
                                   before: Date? = nil,
-                                  limit: Int? = nil,
-                                  req: Request) async throws -> ContactsResponse {
+                                  limit: Int? = nil) async throws -> ContactsResponse {
         let contacts = try await contactRepository.getContacts(
             for: currentUserID,
             before: before,
@@ -52,8 +50,7 @@ struct ContactController: RouteCollection {
         return try await contacts.toResponse(
             currentUserID: currentUserID,
             contactRepository: contactRepository,
-            avatarDirectoryPath: avatarDirectoryPath(),
-            app: req.application
+            avatarLink: avatarLinkLoader.get
         )
     }
     
@@ -62,12 +59,7 @@ struct ContactController: RouteCollection {
         let currentUserID = try req.auth.require(Payload.self).userID
         let contactRequest = try req.content.decode(ContactRequest.self)
         let contact = try await newContact(for: currentUserID, with: contactRequest.responderEmail)
-        return try await contact.toResponse(
-            currentUserID: currentUserID,
-            contactRepository: contactRepository,
-            avatarDirectoryPath: avatarDirectoryPath(),
-            app: req.application
-        )
+        return try await response(with: contact, currentUserID: currentUserID)
     }
     
     private func newContact(for currentUserID: Int,
@@ -111,12 +103,7 @@ struct ContactController: RouteCollection {
         contact.$blockedBy.id = currentUserID
         try await contactRepository.update(contact)
         
-        return try await contact.toResponse(
-            currentUserID: currentUserID,
-            contactRepository: contactRepository,
-            avatarDirectoryPath: avatarDirectoryPath(),
-            app: req.application
-        )
+        return try await response(with: contact, currentUserID: currentUserID)
     }
     
     @Sendable func unblock(req: Request) async throws -> ContactResponse {
@@ -138,12 +125,7 @@ struct ContactController: RouteCollection {
         contact.$blockedBy.id = nil
         try await contactRepository.update(contact)
         
-        return try await contact.toResponse(
-            currentUserID: currentUserID,
-            contactRepository: contactRepository,
-            avatarDirectoryPath: avatarDirectoryPath(),
-            app: req.application
-        )
+        return try await response(with: contact, currentUserID: currentUserID)
     }
     
     private func extractContactID(from parameters: Parameters) throws -> Int {
@@ -153,31 +135,34 @@ struct ContactController: RouteCollection {
         
         return contactID
     }
+    
+    private func response(with contact: Contact, currentUserID: Int) async throws -> ContactResponse {
+        try await contact.toResponse(
+            currentUserID: currentUserID,
+            contactRepository: contactRepository,
+            avatarLink: avatarLinkLoader.get
+        )
+    }
 }
 
 private extension Contact {
     func toResponse(currentUserID: Int,
                     contactRepository: ContactRepository,
-                    avatarDirectoryPath: String,
-                    app: Application) async throws -> ContactResponse {
+                    avatarLink: (String?) -> String?) async throws -> ContactResponse {
         guard let lastUpdate = try await contactRepository.lastUpdateFrom(self) else {
             throw ContactError.databaseError
         }
         
         return try ContactResponse(
             id: requireID(),
-            responder: await getResponder(by: currentUserID, on: contactRepository)
-                .toResponse(
-                    app: app,
-                    avatarDirectoryPath: avatarDirectoryPath
-                ),
+            responder: await responder(by: currentUserID, on: contactRepository).toResponse(avatarLink: avatarLink),
             blockedByUserID: $blockedBy.id,
             unreadMessageCount: await contactRepository.unreadMessagesCountFor(self, senderIsNot: currentUserID),
             lastUpdate: lastUpdate
         )
     }
     
-    private func getResponder(by currentUserID: Int, on contactRepository: ContactRepository) async throws -> User {
+    private func responder(by currentUserID: Int, on contactRepository: ContactRepository) async throws -> User {
         if $user1.id != currentUserID {
             try await contactRepository.getUser1From(self)
         } else {
@@ -189,15 +174,13 @@ private extension Contact {
 private extension [Contact] {
     func toResponse(currentUserID: Int,
                     contactRepository: ContactRepository,
-                    avatarDirectoryPath: String,
-                    app: Application) async throws -> ContactsResponse {
+                    avatarLink: (String?) -> String?) async throws -> ContactsResponse {
         var contactResponses = [ContactResponse]()
         for contact in self {
             contactResponses.append(try await contact.toResponse(
                 currentUserID: currentUserID,
                 contactRepository: contactRepository,
-                avatarDirectoryPath: avatarDirectoryPath,
-                app: app
+                avatarLink: avatarLink
             ))
         }
         return ContactsResponse(contacts: contactResponses)

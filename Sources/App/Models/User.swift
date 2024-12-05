@@ -38,25 +38,7 @@ final class User: Model, @unchecked Sendable {
 }
 
 extension User {
-    func toResponse(app: Application, avatarDirectoryPath: String) -> UserResponse {
-        UserResponse(
-            id: id,
-            name: name,
-            email: email,
-            avatarURL: avatarLink(app: app, avatarDirectoryPath: avatarDirectoryPath)
-        )
-    }
-    
-    private func avatarLink(app: Application, avatarDirectoryPath: String) -> String? {
-        guard let avatarFilename else { return nil }
-        guard !avatarDirectoryPath.isEmpty else { return nil }
-        
-        let filePath = avatarDirectoryPath + avatarFilename
-        guard FileManager.default.fileExists(atPath: filePath) else { return nil }
-        
-        let baseURL = app.http.server.configuration.hostname
-        let port = app.http.server.configuration.port
-        let lastComponent = avatarDirectoryPath.pathComponents.last!.description
-        return "http://\(baseURL):\(port)/\(lastComponent)/\(avatarFilename)"
+    func toResponse(avatarLink: (_ filename: String?) -> String?) -> UserResponse {
+        UserResponse(id: id, name: name, email: email, avatarURL: avatarLink(avatarFilename))
     }
 }

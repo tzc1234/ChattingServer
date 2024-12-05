@@ -339,7 +339,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 let contactResponse = try res.content.decode(ContactResponse.self)
                 expect(
                     contact: contactResponse,
-                    as: anotherUser.toResponse(app: app, avatarDirectoryPath: testAvatarDirectoryPath),
+                    as: anotherUser.toResponse(app: app, directoryPath: testAvatarDirectoryPath),
                     blockedByUserID: try currentUser.requireID()
                 )
             }
@@ -448,7 +448,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 let contactResponse = try res.content.decode(ContactResponse.self)
                 expect(
                     contact: contactResponse,
-                    as: anotherUser.toResponse(app: app, avatarDirectoryPath: testAvatarDirectoryPath)
+                    as: anotherUser.toResponse(app: app, directoryPath: testAvatarDirectoryPath)
                 )
             }
         }
@@ -549,7 +549,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         
         return ContactResponse(
             id: try contact.requireID(),
-            responder: anotherUser.toResponse(app: app, avatarDirectoryPath: testAvatarDirectoryPath),
+            responder: anotherUser.toResponse(app: app, directoryPath: testAvatarDirectoryPath),
             blockedByUserID: nil,
             unreadMessageCount: try await repository.unreadMessagesCountFor(contact, senderIsNot: user.id!),
             lastUpdate: try await repository.lastUpdateFrom(contact)!
@@ -597,5 +597,12 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         let user: User
         let anotherUser: User
         let messageDetails: [MessageDetail]
+    }
+}
+
+private extension User {
+    func toResponse(app: Application, directoryPath: String) -> UserResponse {
+        let loader = try! AvatarLinkLoader(application: app, directoryPath: directoryPath)
+        return toResponse(avatarLink: loader.get)
     }
 }

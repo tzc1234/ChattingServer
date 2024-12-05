@@ -3,15 +3,18 @@ import Vapor
 struct AuthenticationController: RouteCollection, Sendable {
     private let userRepository: UserRepository
     private let refreshTokenRepository: RefreshTokenRepository
+    private let avatarLinkLoader: AvatarLinkLoader
     private let avatarFilename: @Sendable (String) -> (String)
     private let avatarDirectoryPath: @Sendable () -> (String)
     
     init(userRepository: UserRepository,
          refreshTokenRepository: RefreshTokenRepository,
+         avatarLinkLoader: AvatarLinkLoader,
          avatarFilename: @escaping @Sendable (String) -> String,
          avatarDirectoryPath: @escaping @Sendable () -> String) {
         self.userRepository = userRepository
         self.refreshTokenRepository = refreshTokenRepository
+        self.avatarLinkLoader = avatarLinkLoader
         self.avatarFilename = avatarFilename
         self.avatarDirectoryPath = avatarDirectoryPath
     }
@@ -98,7 +101,7 @@ struct AuthenticationController: RouteCollection, Sendable {
     private func newTokenResponse(for user: User, req: Request) async throws -> TokenResponse {
         let (accessToken, refreshToken) = try await newTokens(for: user, req: req)
         return TokenResponse(
-            user: user.toResponse(app: req.application, avatarDirectoryPath: avatarDirectoryPath()),
+            user: user.toResponse(avatarLink: avatarLinkLoader.get),
             accessToken: accessToken,
             refreshToken: refreshToken
         )
@@ -122,6 +125,6 @@ struct AuthenticationController: RouteCollection, Sendable {
             throw AuthenticationError.userNotFound
         }
         
-        return user.toResponse(app: req.application, avatarDirectoryPath: avatarDirectoryPath())
+        return user.toResponse(avatarLink: avatarLinkLoader.get)
     }
 }
