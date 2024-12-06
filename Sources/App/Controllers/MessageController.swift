@@ -1,6 +1,5 @@
 import Fluent
 import Vapor
-import SQLKit
 
 typealias ContactID = Int
 typealias UserID = Int
@@ -10,9 +9,13 @@ actor MessageController: RouteCollection {
     private var contactID: ContactID?
     private var senderID: UserID?
     
+    private let contactRepository: ContactRepository
+    private let messageRepository: MessageRepository
     private let webSocketStore: WebSocketStore
     
-    init(webSocketStore: WebSocketStore) {
+    init(contactRepository: ContactRepository, messageRepository: MessageRepository, webSocketStore: WebSocketStore) {
+        self.contactRepository = contactRepository
+        self.messageRepository = messageRepository
         self.webSocketStore = webSocketStore
     }
     
@@ -28,93 +31,21 @@ actor MessageController: RouteCollection {
     @Sendable
     private func index(req: Request) async throws -> MessagesResponse {
         let contactID = try validateContactID(req: req)
-        let indexRequest = try req.query.decode(MessagesIndexRequest.self)
         let userID = try req.auth.require(Payload.self).userID
+        let indexRequest = try req.query.decode(MessagesIndexRequest.self)
         
-        try await checkContactExist(userID: userID, contactID: contactID, db: req.db)
-        
-        guard let sql = req.db as? SQLDatabase else {
-            throw MessageError.databaseError
-        }
-            
-        let raws = try await sql.select()
-            .column(SQLLiteral.all)
-            .from(messageSubquery(contactID: contactID, userID: userID, request: indexRequest, sql: sql))
-            .orderBy("id", .ascending)
-            .all()
-        return MessagesResponse(messages: try raws.map { try $0.decode(model: MessageResponse.self) })
-    }
-    
-    private func checkContactExist(userID: UserID, contactID: ContactID, db: Database) async throws {
-        guard try await Contact.query(on: db)
-            .filter(by: userID)
-            .filter(\.$id == contactID)
-            .count() > 0
-        else {
+        guard try await contactRepository.isContactExited(id: contactID, withUserID: userID) else {
             throw MessageError.contactNotFound
         }
-    }
-    
-    private func messageSubquery(contactID: ContactID,
-                                 userID: UserID,
-                                 request: MessagesIndexRequest,
-                                 sql: SQLDatabase) async throws -> SQLSubquery {
-        var messageSubquery = SQLSubqueryBuilder()
-            .column(SQLLiteral.all)
-            .from("messages")
-            .where("contact_id", .equal, contactID)
         
-        let limit = request.limit ?? defaultLimit
-        
-        messageSubquery = if let beforeMessageId = request.beforeMessageID {
-            messageSubquery
-                .where("id", .lessThan, beforeMessageId)
-                .orderBy("id", .descending)
-        } else if let afterMessageId = request.afterMessageID {
-            messageSubquery
-                .where("id", .greaterThan, afterMessageId)
-                .orderBy("id", .ascending)
-        } else if let middleMessageID = try await middleMessageID(currentUserID: userID, contactID: contactID, limit: limit, on: sql) {
-            messageSubquery
-                .where("id", .greaterThanOrEqual, middleMessageID)
-                .orderBy("id", .ascending)
-        } else {
-            messageSubquery
-                .orderBy("id", .descending)
-        }
-        
-        return messageSubquery.limit(limit).query
-    }
-    
-    private func middleMessageID(currentUserID: UserID, contactID: ContactID, limit: Int, on sql: SQLDatabase) async throws -> Int? {
-        let middle = limit / 2 + 1
-        let middleMessageIDAtLast = SQLSubqueryBuilder()
-            .column("id")
-            .from("messages")
-            .where("id", .lessThanOrEqual, firstUnreadMessageID(currentUserID: currentUserID, contactID: contactID))
-            .where("contact_id", .equal, contactID)
-            .orderBy("id", .descending)
-            .limit(middle)
-            .query
-        
-        let extractMiddleMessageID = try await sql.select()
-            .column("id")
-            .from(middleMessageIDAtLast)
-            .orderBy("id", .ascending)
-            .limit(1)
-            .first()
-        return try extractMiddleMessageID?.decode(column: "id", inferringAs: Int.self)
-    }
-    
-    private func firstUnreadMessageID(currentUserID: UserID, contactID: ContactID) -> SQLSubquery {
-        SQLSubqueryBuilder()
-            .column("id")
-            .from("messages")
-            .where("contact_id", .equal, contactID)
-            .where("sender_id", .notEqual, currentUserID)
-            .where("is_read", .equal, false)
-            .limit(1)
-            .query
+        let messages = try await messageRepository.getMessages(
+            contactID: contactID,
+            userID: userID,
+            beforeMessageId: indexRequest.beforeMessageID,
+            afterMessageId: indexRequest.afterMessageID,
+            limit: indexRequest.limit ?? defaultLimit
+        )
+        return MessagesResponse(messages: try messages.map { try $0.toResponse() })
     }
     
     private func validateContactID(req: Request) throws -> ContactID {
@@ -238,5 +169,17 @@ extension MessageController {
     private func close(_ ws: WebSocket, for contactID: ContactID, with userID: UserID) async throws {
         try await ws.close(code: .unacceptableData)
         await webSocketStore.remove(for: contactID, with: userID)
+    }
+}
+
+extension Message {
+    func toResponse() throws -> MessageResponse {
+        try MessageResponse(
+            id: requireID(),
+            text: text,
+            senderID: $sender.id,
+            isRead: isRead,
+            createdAt: createdAt
+        )
     }
 }

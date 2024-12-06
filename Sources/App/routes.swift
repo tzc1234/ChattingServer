@@ -14,6 +14,7 @@ func routes(_ app: Application,
     let userRepository = UserRepository(database: db)
     let refreshTokenRepository = RefreshTokenRepository(database: db)
     let contactRepository = ContactRepository(database: db)
+    let messageRepository = MessageRepository(database: db)
     
     let avatarFileSaver = AvatarFileSaver(
         application: app,
@@ -36,6 +37,10 @@ func routes(_ app: Application,
             userRepository: userRepository,
             avatarLinkLoader: avatarLinkLoader
         ))
-        try routes.register(collection: MessageController(webSocketStore: webSocketStore))
+        try routes.register(collection: MessageController(
+            contactRepository: contactRepository,
+            messageRepository: messageRepository,
+            webSocketStore: webSocketStore
+        ))
     }
 }

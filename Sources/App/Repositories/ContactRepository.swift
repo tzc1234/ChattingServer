@@ -80,6 +80,13 @@ actor ContactRepository {
             .first()
     }
     
+    func isContactExited(id: Int, withUserID userID: Int) async throws -> Bool {
+        try await Contact.query(on: database)
+            .filter(by: userID)
+            .filter(\.$id == id)
+            .count() > 0
+    }
+    
     func getUser1For(_ contact: Contact) async throws -> User {
         try await contact.$user1.get(on: database)
     }
