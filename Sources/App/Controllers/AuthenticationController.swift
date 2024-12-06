@@ -1,6 +1,6 @@
 import Vapor
 
-struct AuthenticationController: RouteCollection, Sendable {
+struct AuthenticationController: RouteCollection {
     private let userRepository: UserRepository
     private let refreshTokenRepository: RefreshTokenRepository
     private let avatarFileSaver: AvatarFileSaver
