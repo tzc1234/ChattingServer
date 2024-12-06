@@ -28,8 +28,11 @@ func createUserForTokenResponse(_ app: Application,
     return tokenResponse!
 }
 
-func createUserAndAccessToken(_ app: Application) async throws -> (user: User, accessToken: String) {
-    let user = try await createUser(app)
+func createUserAndAccessToken(_ app: Application,
+                              name: String = "a username",
+                              email: String = "a@email.com",
+                              password: String = "aPassword") async throws -> (user: User, accessToken: String) {
+    let user = try await createUser(app, name: name, email: email, password: password)
     let accessToken = try await app.jwt.keys.sign(Payload(for: user))
     return (user, accessToken)
 }

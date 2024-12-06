@@ -64,59 +64,47 @@ struct ContactTests: AppTests, AvatarFileHelpers {
     
     @Test("new contact success with currentUserID < responderID")
     func mewContactSuccessWithCurrentUserIDSmallerThanResponderID() async throws {
-        let avatarFilename = "test-avatar.png"
-        try await makeApp(avatarFilename: avatarFilename) { app in
-            let currentUserToken = try await createUserForTokenResponse(app)
-            let responderToken = try await createUserForTokenResponse(
-                app,
-                email: "responder@email.com",
-                avatar: avatarFile(app)
-            )
-            let contactRequest = ContactRequest(responderEmail: responderToken.user.email)
+        try await makeApp { app in
+            let (currentUser, currentUserToken) = try await createUserAndAccessToken(app)
+            let (responder, _) = try await createUserAndAccessToken(app, email: "responder@email.com")
+            let contactRequest = ContactRequest(responderEmail: responder.email)
             
-            try #require(currentUserToken.user.id! < responderToken.user.id!)
-            try #require(responderToken.user.avatarURL != nil)
+            try #require(currentUser.id! < responder.id!)
             
             try await app.test(.POST, .apiPath("contacts")) { req in
-                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
+                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken)
                 try req.content.encode(contactRequest)
             } afterResponse: { res async throws in
                 #expect(res.status == .ok)
                 
                 let contact = try res.content.decode(ContactResponse.self)
-                expect(contact: contact, as: responderToken.user)
+                expect(contact: contact, as: await responder
+                    .toResponse(app: app, directoryPath: testAvatarDirectoryPath)
+                )
             }
-        } afterShutdown: {
-            try removeUploadedAvatar(filename: avatarFilename)
         }
     }
     
     @Test("new contact success with currentUserID > responderID")
     func mewContactSuccessWithCurrentUserIDBiggerThanResponderID() async throws {
-        let avatarFilename = "test-avatar2.png"
-        try await makeApp(avatarFilename: avatarFilename) { app in
-            let responderToken = try await createUserForTokenResponse(
-                app,
-                email: "responder@email.com",
-                avatar: avatarFile(app)
-            )
-            let currentUserToken = try await createUserForTokenResponse(app)
-            let contactRequest = ContactRequest(responderEmail: responderToken.user.email)
+        try await makeApp { app in
+            let (responder, _) = try await createUserAndAccessToken(app, email: "responder@email.com")
+            let (currentUser, currentUserToken) = try await createUserAndAccessToken(app)
+            let contactRequest = ContactRequest(responderEmail: responder.email)
             
-            try #require(currentUserToken.user.id! > responderToken.user.id!)
-            try #require(responderToken.user.avatarURL != nil)
+            try #require(currentUser.id! > responder.id!)
             
             try await app.test(.POST, .apiPath("contacts")) { req in
-                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
+                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken)
                 try req.content.encode(contactRequest)
             } afterResponse: { res async throws in
                 #expect(res.status == .ok)
                 
                 let contact = try res.content.decode(ContactResponse.self)
-                expect(contact: contact, as: responderToken.user)
+                expect(contact: contact, as: await responder
+                    .toResponse(app: app, directoryPath: testAvatarDirectoryPath)
+                )
             }
-        } afterShutdown: {
-            try removeUploadedAvatar(filename: avatarFilename)
         }
     }
     
