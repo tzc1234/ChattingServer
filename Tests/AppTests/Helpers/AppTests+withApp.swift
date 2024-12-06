@@ -16,6 +16,7 @@ extension AppTests {
     func withApp(eventLoopGroup: EventLoopGroup? = nil,
                  avatarFilename: @escaping @Sendable (String) -> (String),
                  avatarDirectoryPath: String,
+                 passwordHasher: UserPasswordHasher? = nil,
                  webSocketStore: WebSocketStore,
                  _ test: (Application) async throws -> (),
                  afterShutdown: () throws -> Void = {}) async throws {
@@ -26,6 +27,7 @@ extension AppTests {
                 app,
                 avatarFilename: avatarFilename,
                 avatarDirectoryPath: avatarDirectoryPath,
+                passwordHasher: passwordHasher,
                 webSocketStore: webSocketStore
             )
             try await test(app)

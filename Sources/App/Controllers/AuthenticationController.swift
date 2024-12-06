@@ -5,15 +5,18 @@ struct AuthenticationController: RouteCollection, Sendable {
     private let refreshTokenRepository: RefreshTokenRepository
     private let avatarFileSaver: AvatarFileSaver
     private let avatarLinkLoader: AvatarLinkLoader
+    private let passwordHasher: UserPasswordHasher
     
     init(userRepository: UserRepository,
          refreshTokenRepository: RefreshTokenRepository,
          avatarFileSaver: AvatarFileSaver,
-         avatarLinkLoader: AvatarLinkLoader) {
+         avatarLinkLoader: AvatarLinkLoader,
+         passwordHasher: UserPasswordHasher) {
         self.userRepository = userRepository
         self.refreshTokenRepository = refreshTokenRepository
         self.avatarFileSaver = avatarFileSaver
         self.avatarLinkLoader = avatarLinkLoader
+        self.passwordHasher = passwordHasher
     }
     
     func boot(routes: RoutesBuilder) throws {
@@ -44,7 +47,7 @@ struct AuthenticationController: RouteCollection, Sendable {
         }
         
         let user = registerRequest.toUserModel()
-        user.password = try await req.password.async.hash(user.password)
+        user.password = try await passwordHasher.hash(user.password)
         user.avatarFilename = savedAvatarFilename
         try await userRepository.create(user)
         
@@ -55,7 +58,7 @@ struct AuthenticationController: RouteCollection, Sendable {
     private func login(req: Request) async throws -> TokenResponse {
         let loginRequest = try req.content.decode(LoginRequest.self)
         guard let user = try await userRepository.findBy(email: loginRequest.email),
-                try await req.password.async.verify(loginRequest.password, created: user.password) else {
+              try await passwordHasher.verify(loginRequest.password, hashed: user.password) else {
             throw AuthenticationError.userNotFound
         }
         
