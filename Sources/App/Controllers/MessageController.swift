@@ -1,4 +1,3 @@
-import Fluent
 import Vapor
 
 typealias ContactID = Int
@@ -48,14 +47,6 @@ actor MessageController: RouteCollection {
         return MessagesResponse(messages: try messages.map { try $0.toResponse() })
     }
     
-    private func validateContactID(req: Request) throws -> ContactID {
-        guard let contactIDString = req.parameters.get("contact_id"), let contactID = Int(contactIDString) else {
-            throw MessageError.contactIDInvalid
-        }
-        
-        return contactID
-    }
-    
     @Sendable
     private func readMessages(req: Request) async throws -> Response {
         let userID = try req.auth.require(Payload.self).userID
@@ -73,6 +64,14 @@ actor MessageController: RouteCollection {
         )
         
         return Response()
+    }
+    
+    private func validateContactID(req: Request) throws -> ContactID {
+        guard let contactIDString = req.parameters.get("contact_id"), let contactID = Int(contactIDString) else {
+            throw MessageError.contactIDInvalid
+        }
+        
+        return contactID
     }
 }
 
@@ -164,7 +163,7 @@ extension MessageController {
     }
 }
 
-extension Message {
+private extension Message {
     func toResponse() throws -> MessageResponse {
         try MessageResponse(
             id: requireID(),
