@@ -125,7 +125,7 @@ extension MessageController {
             
             let message = Message(contactID: contactID, senderID: senderID, text: incoming.text)
             do {
-                try await message.save(on: req.db)
+                try await self?.messageRepository.create(message)
                 
                 let messageResponse = MessageResponse(
                     id: try message.requireID(),

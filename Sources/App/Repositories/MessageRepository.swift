@@ -67,7 +67,7 @@ actor MessageRepository {
         let middleMessageIDAtLast = SQLSubqueryBuilder()
             .column("id")
             .from("messages")
-            .where("id", .lessThanOrEqual, firstUnreadMessageIDQuery(contactID: contactID, senderIDIsNot: userID))
+            .where("id", .lessThanOrEqual, firstUnreadMessageIDSubquery(contactID: contactID, senderIDIsNot: userID))
             .where("contact_id", .equal, contactID)
             .orderBy("id", .descending)
             .limit(middle)
@@ -82,7 +82,7 @@ actor MessageRepository {
             .decode(column: "id", inferringAs: Int.self)
     }
     
-    private func firstUnreadMessageIDQuery(contactID: ContactID, senderIDIsNot userID: UserID) -> SQLSubquery {
+    private func firstUnreadMessageIDSubquery(contactID: ContactID, senderIDIsNot userID: UserID) -> SQLSubquery {
         SQLSubqueryBuilder()
             .column("id")
             .from("messages")
@@ -111,5 +111,9 @@ actor MessageRepository {
             .filter(\.$isRead == false)
             .set(\.$isRead, to: true)
             .update()
+    }
+    
+    func create(_ message: Message) async throws {
+        try await message.create(on: database)
     }
 }
