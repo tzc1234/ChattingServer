@@ -98,6 +98,16 @@ actor MessageRepository {
             .query
     }
     
+    func updateUnreadMessageToRead(contactID: ContactID, userID: UserID, untilMessageID: Int) async throws {
+        try await Message.query(on: database)
+            .filter(\.$id <= untilMessageID)
+            .filter(\.$contact.$id <= contactID)
+            .filter(\.$sender.$id != userID)
+            .filter(\.$isRead == false)
+            .set(\.$isRead, to: true)
+            .update()
+    }
+    
     private func sqlDatabase() throws(Error) -> SQLDatabase {
         guard let sql = database as? SQLDatabase else { throw .databaseConversion }
         

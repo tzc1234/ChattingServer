@@ -62,28 +62,17 @@ actor MessageController: RouteCollection {
         let contactID = try validateContactID(req: req)
         let untilMessageID = try req.content.decode(ReadMessageRequest.self).untilMessageID
         
-        let contact = try await getContact(userID: userID, contactID: contactID, db: req.db)
-        try await contact.$messages
-            .query(on: req.db)
-            .filter(\.$id <= untilMessageID)
-            .filter(\.$sender.$id != userID)
-            .filter(\.$isRead == false)
-            .set(\.$isRead, to: true)
-            .update()
-        
-        return Response()
-    }
-    
-    private func getContact(userID: UserID, contactID: ContactID, db: Database) async throws -> Contact {
-        guard let contact = try await Contact.query(on: db)
-            .filter(by: userID)
-            .filter(\.$id == contactID)
-            .first()
-        else {
+        guard try await contactRepository.isContactExited(id: contactID, withUserID: userID) else {
             throw MessageError.contactNotFound
         }
         
-        return contact
+        try await messageRepository.updateUnreadMessageToRead(
+            contactID: contactID,
+            userID: userID,
+            untilMessageID: untilMessageID
+        )
+        
+        return Response()
     }
 }
 
@@ -93,7 +82,10 @@ extension MessageController {
         let userID = try req.auth.require(Payload.self).userID
         let contactID = try validateContactID(req: req)
         
-        let contact = try await getContact(userID: userID, contactID: contactID, db: req.db)
+        guard let contact = try await contactRepository.findBy(id: contactID, userID: userID) else {
+            throw MessageError.contactNotFound
+        }
+        
         guard contact.$blockedBy.id == nil else {
             throw MessageError.contactIsBlocked
         }
