@@ -13,14 +13,14 @@ actor ContactRepository {
         case databaseConversion
     }
     
-    func getContacts(for currentUserID: Int, before: Date?, limit: Int) async throws -> [Contact] {
+    func getContacts(for userID: Int, before: Date?, limit: Int) async throws -> [Contact] {
         let contactTable = SQLQualifiedTable(Contact.schema, space: Contact.space)
         let messageTable = SQLQualifiedTable(Message.schema, space: Message.space)
         
         let contactAllColumns = SQLColumn(SQLLiteral.all, table: contactTable)
         let contactIDColumn = SQLColumn(SQLLiteral.string("id"), table: contactTable)
         let messageContactIDColumn = SQLColumn(SQLLiteral.string("contact_id"), table: messageTable)
-        let currentUserIDNumeric = SQLLiteral.numeric("\(currentUserID)")
+        let userIDNumeric = SQLLiteral.numeric("\(userID)")
         
         let createdAtLiteral = SQLLiteral.string("created_at")
         let messageCreatedAtColumn = SQLColumn(createdAtLiteral, table: messageTable)
@@ -46,8 +46,8 @@ actor ContactRepository {
             )
             .groupBy(contactIDColumn)
             .having(lastUpdate, lessThan: before)
-            .having(contactUserID1Column, .equal, currentUserIDNumeric)
-            .orHaving(contactUserID2Column, .equal, currentUserIDNumeric)
+            .having(contactUserID1Column, .equal, userIDNumeric)
+            .orHaving(contactUserID2Column, .equal, userIDNumeric)
             .orderBy(lastUpdate, .descending)
             .limit(limit)
             .all()
