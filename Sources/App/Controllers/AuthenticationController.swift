@@ -1,6 +1,6 @@
 import Vapor
 
-struct AuthenticationController: RouteCollection {
+struct AuthenticationController {
     private let userRepository: UserRepository
     private let refreshTokenRepository: RefreshTokenRepository
     private let avatarFileSaver: AvatarFileSaver
@@ -17,17 +17,6 @@ struct AuthenticationController: RouteCollection {
         self.avatarFileSaver = avatarFileSaver
         self.avatarLinkLoader = avatarLinkLoader
         self.passwordHasher = passwordHasher
-    }
-    
-    func boot(routes: RoutesBuilder) throws {
-        routes.on(.POST, "register", body: .collect(maxSize: "1mb"), use: register)
-        routes.post("login", use: login)
-        routes.post("refreshToken", use: refreshToken)
-        
-        routes.grouped("me")
-            .group(AccessTokenGuardMiddleware(), UserAuthenticator()) { route in
-                route.get(use: getCurrentUser)
-            }
     }
     
     @Sendable
@@ -121,5 +110,18 @@ struct AuthenticationController: RouteCollection {
             
             return await avatarLinkLoader?.get(filename: filename)
         }
+    }
+}
+
+extension AuthenticationController: RouteCollection {
+    func boot(routes: RoutesBuilder) throws {
+        routes.on(.POST, "register", body: .collect(maxSize: "1mb"), use: register)
+        routes.post("login", use: login)
+        routes.post("refreshToken", use: refreshToken)
+        
+        routes.grouped("me")
+            .group(AccessTokenGuardMiddleware(), UserAuthenticator()) { route in
+                route.get(use: getCurrentUser)
+            }
     }
 }

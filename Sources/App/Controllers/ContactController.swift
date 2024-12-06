@@ -1,6 +1,6 @@
 import Vapor
 
-struct ContactController: RouteCollection {
+struct ContactController {
     private var defaultLimit: Int { 20 }
     
     private let contactRepository: ContactRepository
@@ -13,19 +13,6 @@ struct ContactController: RouteCollection {
         self.contactRepository = contactRepository
         self.userRepository = userRepository
         self.avatarLinkLoader = avatarLinkLoader
-    }
-    
-    func boot(routes: RoutesBuilder) throws {
-        let protected = routes.grouped("contacts")
-            .grouped(AccessTokenGuardMiddleware(), UserAuthenticator())
-        
-        protected.get(use: index)
-        protected.post(use: create)
-        
-        protected.group(":contact_id") { routes in
-            routes.patch("block", use: block)
-            routes.patch("unblock", use: unblock)
-        }
     }
     
     @Sendable
@@ -148,6 +135,21 @@ struct ContactController: RouteCollection {
                 return await avatarLinkLoader?.get(filename: filename)
             }
         )
+    }
+}
+
+extension ContactController: RouteCollection {
+    func boot(routes: RoutesBuilder) throws {
+        let protected = routes.grouped("contacts")
+            .grouped(AccessTokenGuardMiddleware(), UserAuthenticator())
+        
+        protected.get(use: index)
+        protected.post(use: create)
+        
+        protected.group(":contact_id") { routes in
+            routes.patch("block", use: block)
+            routes.patch("unblock", use: unblock)
+        }
     }
 }
 

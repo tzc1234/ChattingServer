@@ -3,7 +3,7 @@ import Vapor
 typealias ContactID = Int
 typealias UserID = Int
 
-actor MessageController: RouteCollection {
+actor MessageController {
     private var defaultLimit: Int { 20 }
     private var contactID: ContactID?
     private var senderID: UserID?
@@ -16,15 +16,6 @@ actor MessageController: RouteCollection {
         self.contactRepository = contactRepository
         self.messageRepository = messageRepository
         self.webSocketStore = webSocketStore
-    }
-    
-    nonisolated func boot(routes: RoutesBuilder) throws {
-        let protected = routes.grouped("contacts", ":contact_id", "messages")
-            .grouped(AccessTokenGuardMiddleware(), UserAuthenticator())
-        
-        protected.get(use: index)
-        protected.webSocket("channel", shouldUpgrade: upgradeToMessagesChannel, onUpgrade: messagesChannel)
-        protected.patch("read", use: readMessages)
     }
     
     @Sendable
@@ -72,6 +63,17 @@ actor MessageController: RouteCollection {
         }
         
         return contactID
+    }
+}
+
+extension MessageController: RouteCollection {
+    nonisolated func boot(routes: RoutesBuilder) throws {
+        let protected = routes.grouped("contacts", ":contact_id", "messages")
+            .grouped(AccessTokenGuardMiddleware(), UserAuthenticator())
+        
+        protected.get(use: index)
+        protected.webSocket("channel", shouldUpgrade: upgradeToMessagesChannel, onUpgrade: messagesChannel)
+        protected.patch("read", use: readMessages)
     }
 }
 
