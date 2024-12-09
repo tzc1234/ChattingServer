@@ -128,7 +128,7 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
         let loginRequest = LoginRequest(email: email, password: password)
         
         try await makeApp { app in
-            let oldToken = try await createUserAndTokenResponse(
+            let oldToken = try await createTokenResponse(
                 app,
                 name: username,
                 email: email,
@@ -183,7 +183,7 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
     @Test("refresh token success")
     func refreshTokenSuccess() async throws {
         try await makeApp { app in
-            let oldToken = try await createUserForTokenResponse(app)
+            let oldToken = try await createTokenResponse(app)
             let refreshTokenRequest = RefreshTokenRequest(refreshToken: oldToken.refreshToken)
             
             try await app.test(.POST, .apiPath("refreshToken"), beforeRequest: { req in

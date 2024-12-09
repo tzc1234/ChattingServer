@@ -33,7 +33,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         try await makeApp { app in
             let nonExistResponderEmail = "non-exist@email.com"
             let contactRequest = ContactRequest(responderEmail: nonExistResponderEmail)
-            let accessToken = try await createUserForTokenResponse(app).accessToken
+            let accessToken = try await createTokenResponse(app).accessToken
             
             try await app.test(.POST, .apiPath("contacts")) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
@@ -47,7 +47,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
     @Test("new contact failure with responder is as same as current user")
     func mewContactFailureWithResponderSameAsCurrentUser() async throws {
         try await makeApp { app in
-            let token = try await createUserForTokenResponse(app)
+            let token = try await createTokenResponse(app)
             let currentUserEmail = token.user.email
             let contactRequest = ContactRequest(responderEmail: currentUserEmail)
             
@@ -133,10 +133,10 @@ struct ContactTests: AppTests, AvatarFileHelpers {
     @Test("get empty contacts")
     func getEmptyContacts() async throws {
         try await makeApp { app in
-            let currentUserToken = try await createUserForTokenResponse(app)
+            let tokenResponse = try await createTokenResponse(app)
             
             try await app.test(.GET, .apiPath("contacts")) { req in
-                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
+                req.headers.bearerAuthorization = BearerAuthorization(token: tokenResponse.accessToken)
                 try req.query.encode(ContactIndexRequest(before: nil, limit: nil))
             } afterResponse: { res async throws in
                 #expect(res.status == .ok)
@@ -278,10 +278,10 @@ struct ContactTests: AppTests, AvatarFileHelpers {
     @Test("block contact failure with an non-exist contactID")
     func blockContactFailureWithNonExistContactID() async throws {
         try await makeApp { app in
-            let currentUserToken = try await createUserForTokenResponse(app)
+            let tokenResponse = try await createTokenResponse(app)
             
             try await app.test(.PATCH, .apiPath("contacts", "1", "block")) { req in
-                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
+                req.headers.bearerAuthorization = BearerAuthorization(token: tokenResponse.accessToken)
             } afterResponse: { res async throws in
                 #expect(res.status == .notFound)
                 let error = try res.content.decode(ErrorResponse.self)
@@ -359,10 +359,10 @@ struct ContactTests: AppTests, AvatarFileHelpers {
     @Test("unblock contact failure with an non-exist contactID")
     func unblockContactFailureWithNonExistContactID() async throws {
         try await makeApp { app in
-            let currentUserToken = try await createUserForTokenResponse(app)
+            let tokenResponse = try await createTokenResponse(app)
             
             try await app.test(.PATCH, .apiPath("contacts", "1", "unblock")) { req in
-                req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken.accessToken)
+                req.headers.bearerAuthorization = BearerAuthorization(token: tokenResponse.accessToken)
             } afterResponse: { res async throws in
                 #expect(res.status == .notFound)
                 let error = try res.content.decode(ErrorResponse.self)

@@ -11,28 +11,11 @@ func createUser(_ app: Application,
     return user
 }
 
-func createUserForTokenResponse(_ app: Application,
-                                name: String = "a username",
-                                email: String = "a@email.com",
-                                hashedPassword: String = "aPassword",
-                                avatar: File? = nil) async throws -> TokenResponse {
-    let registerRequest = RegisterRequest(name: name, email: email, password: hashedPassword, avatar: avatar)
-    var tokenResponse: TokenResponse?
-    
-    try await app.test(.POST, .apiPath("register"), beforeRequest: { req in
-        try req.content.encode(registerRequest)
-    }, afterResponse: { res async throws in
-        tokenResponse = try res.content.decode(TokenResponse.self)
-    })
-    
-    return tokenResponse!
-}
-
-func createUserAndTokenResponse(_ app: Application,
-                                name: String = "a username",
-                                email: String = "a@email.com",
-                                hashedPassword: String = "aPassword",
-                                avatarLink: (String?) async -> String? = {_ in nil}) async throws -> TokenResponse {
+func createTokenResponse(_ app: Application,
+                         name: String = "a username",
+                         email: String = "a@email.com",
+                         hashedPassword: String = "hashedPassword",
+                         avatarLink: (String?) async -> String? = {_ in nil}) async throws -> TokenResponse {
     let user = try await createUser(app, name: name, email: email, hashedPassword: hashedPassword)
     let (accessToken, refreshToken) = try await generateTokens(for: user, app)
     return await TokenResponse(
