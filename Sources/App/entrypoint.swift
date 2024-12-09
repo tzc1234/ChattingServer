@@ -13,7 +13,7 @@ enum Entrypoint {
         let dependenciesContainer = try DependenciesContainer(
             application: app,
             avatarDirectoryPath: app.directory.publicDirectory + Constants.AVATARS_DIRECTORY,
-            avatarFilename: { "\(Date().timeIntervalSince1970)_\($0)" }
+            avatarFilenameMaker: { "\(Date().timeIntervalSince1970)_\($0)" }
         )
 
         do {

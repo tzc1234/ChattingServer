@@ -14,7 +14,7 @@ extension AppTests {
         let di = try DependenciesContainer(
             application: app,
             avatarDirectoryPath: avatarDirectoryPath,
-            avatarFilename: avatarFilename,
+            avatarFilenameMaker: avatarFilename,
             passwordHasher: passwordHasher
         )
         

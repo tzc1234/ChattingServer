@@ -10,24 +10,24 @@ final class DependenciesContainer {
     private(set) lazy var messageRepository = MessageRepository(database: database)
     private(set) lazy var avatarFileSaver = AvatarFileSaver(
         application: application,
-        filename: avatarFilename,
+        filename: avatarFilenameMaker,
         directoryPath: avatarDirectoryPath
     )
     let webSocketStore = WebSocketStore()
     
     private let application: Application
     private let avatarDirectoryPath: String
-    private let avatarFilename: @Sendable (String) -> String
+    private let avatarFilenameMaker: @Sendable (String) -> String
     let avatarLinkLoader: AvatarLinkLoader
     private(set) lazy var passwordHasher: UserPasswordHasher = DefaultUserPasswordHasher(application: application)
     
     init(application: Application,
          avatarDirectoryPath: String,
-         avatarFilename: @escaping @Sendable (String) -> String,
+         avatarFilenameMaker: @escaping @Sendable (String) -> String,
          passwordHasher: UserPasswordHasher? = nil) throws {
         self.application = application
         self.avatarDirectoryPath = avatarDirectoryPath
-        self.avatarFilename = avatarFilename
+        self.avatarFilenameMaker = avatarFilenameMaker
         self.avatarLinkLoader = try AvatarLinkLoader(application: application, directoryPath: avatarDirectoryPath)
         passwordHasher.map { self.passwordHasher = $0 }
     }

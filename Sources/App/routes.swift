@@ -1,8 +1,7 @@
 import Fluent
 import Vapor
 
-func routes(_ app: Application,
-            dependenciesContainer: DependenciesContainer) throws {
+func routes(_ app: Application, dependenciesContainer: DependenciesContainer) throws {
     app.get { req async in
         "It works!"
     }
