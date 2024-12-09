@@ -26,9 +26,7 @@ actor AvatarFileSaver {
     
     func save(_ avatar: File) async throws -> String {
         let filename = avatar.filename
-        guard filename.lowercased().hasSuffix(".jpg") ||
-             filename.lowercased().hasSuffix(".jpeg") ||
-             filename.lowercased().hasSuffix(".png") else {
+        guard ["jpg", "jpeg", "png"].contains((filename.lowercased() as NSString).pathExtension) else {
             throw Error.fileTypeNotSupport
         }
         
