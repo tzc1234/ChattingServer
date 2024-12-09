@@ -264,10 +264,9 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
     private func makeApp(_ test: (Application) async throws -> (),
                          afterShutdown: () throws -> Void = {}) async throws {
         try await withApp(
-            avatarFilename: { _ in testAvatarFileName },
             avatarDirectoryPath: testAvatarDirectoryPath,
+            avatarFilename: { _ in testAvatarFileName },
             passwordHasher: UserPasswordHasherStub(),
-            webSocketStore: WebSocketStore(),
             test,
             afterShutdown: afterShutdown
         )
