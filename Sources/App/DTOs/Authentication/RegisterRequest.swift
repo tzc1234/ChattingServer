@@ -9,7 +9,7 @@ struct RegisterRequest: Content {
 }
 
 extension RegisterRequest {
-    func toModel() -> User {
+    func toUserModel() -> User {
         let model = User()
         model.name = name
         model.email = email

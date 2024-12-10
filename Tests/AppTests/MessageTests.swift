@@ -332,9 +332,8 @@ struct MessageTests: AppTests {
     private func makeApp(eventLoopGroup: EventLoopGroup? = nil, _ test: (Application) async throws -> ()) async throws {
         try await withApp(
             eventLoopGroup: eventLoopGroup,
+            avatarDirectoryPath: "/anyPath",
             avatarFilename: { _ in "any-filename.png" },
-            avatarDirectoryPath: { "/anyPath" },
-            webSocketStore: WebSocketStore(),
             test
         )
     }

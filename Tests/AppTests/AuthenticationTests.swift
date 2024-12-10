@@ -128,7 +128,12 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
         let loginRequest = LoginRequest(email: email, password: password)
         
         try await makeApp { app in
-            let oldToken = try await createUserForTokenResponse(app, name: username, email: email, password: password)
+            let oldToken = try await createTokenResponse(
+                app,
+                name: username,
+                email: email,
+                hashedPassword: password
+            )
             
             try await app.test(.POST, .apiPath("login"), beforeRequest: { req in
                 try req.content.encode(loginRequest)
@@ -178,7 +183,7 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
     @Test("refresh token success")
     func refreshTokenSuccess() async throws {
         try await makeApp { app in
-            let oldToken = try await createUserForTokenResponse(app)
+            let oldToken = try await createTokenResponse(app)
             let refreshTokenRequest = RefreshTokenRequest(refreshToken: oldToken.refreshToken)
             
             try await app.test(.POST, .apiPath("refreshToken"), beforeRequest: { req in
@@ -259,9 +264,9 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
     private func makeApp(_ test: (Application) async throws -> (),
                          afterShutdown: () throws -> Void = {}) async throws {
         try await withApp(
+            avatarDirectoryPath: testAvatarDirectoryPath,
             avatarFilename: { _ in testAvatarFileName },
-            avatarDirectoryPath: { testAvatarDirectoryPath },
-            webSocketStore: WebSocketStore(),
+            passwordHasher: UserPasswordHasherStub(),
             test,
             afterShutdown: afterShutdown
         )
@@ -295,5 +300,15 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
         let fileURL = URL(fileURLWithPath: testResourceDirectory(app) + "more_than_2mb.jpg")
         let fileData = try Data(contentsOf: fileURL)
         return File(data: .init(data: fileData), filename: "more_than_2mb.jpg")
+    }
+    
+    private actor UserPasswordHasherStub: UserPasswordHasher {
+        func hash(_ password: String) async throws -> String {
+            password
+        }
+        
+        func verify(_ password: String, hashed: String) async throws -> Bool {
+            true
+        }
     }
 }

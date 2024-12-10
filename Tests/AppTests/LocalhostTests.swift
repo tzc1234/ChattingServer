@@ -1,7 +1,6 @@
 @testable import App
 import XCTVapor
 import Testing
-import Fluent
 
 @Suite("Localhost initial tests")
 struct LocalhostTests: AppTests {
@@ -13,5 +12,15 @@ struct LocalhostTests: AppTests {
                 #expect(response.body.string == "It works!")
             })
         }
+    }
+    
+    // MARK: - Helpers
+    
+    private func withApp(_ test: (Application) async throws -> ()) async throws {
+        try await withApp(
+            avatarDirectoryPath: "/anyPath",
+            avatarFilename: { $0 },
+            test
+        )
     }
 }

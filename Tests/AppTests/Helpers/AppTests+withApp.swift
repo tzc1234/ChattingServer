@@ -4,30 +4,23 @@ import XCTVapor
 protocol AppTests {}
 
 extension AppTests {
-    func withApp(_ test: (Application) async throws -> ()) async throws {
-        try await withApp(
-            avatarFilename: { $0 },
-            avatarDirectoryPath: { "avatarDirectory" },
-            webSocketStore: WebSocketStore(),
-            test
-        )
-    }
-    
     func withApp(eventLoopGroup: EventLoopGroup? = nil,
+                 avatarDirectoryPath: String,
                  avatarFilename: @escaping @Sendable (String) -> (String),
-                 avatarDirectoryPath: @escaping @Sendable () -> (String),
-                 webSocketStore: WebSocketStore,
+                 passwordHasher: UserPasswordHasher? = nil,
                  _ test: (Application) async throws -> (),
                  afterShutdown: () throws -> Void = {}) async throws {
         let app = try await Application.make(.testing, eventLoopGroup != nil ? .shared(eventLoopGroup!) : .singleton)
+        let di = try DependenciesContainer(
+            application: app,
+            avatarDirectoryPath: avatarDirectoryPath,
+            avatarFilenameMaker: avatarFilename,
+            passwordHasher: passwordHasher
+        )
+        
         do {
             try await configure(app)
-            try routes(
-                app,
-                avatarFilename: avatarFilename,
-                avatarDirectoryPath: avatarDirectoryPath,
-                webSocketStore: webSocketStore
-            )
+            try routes(app, dependenciesContainer: di)
             try await test(app)
             try await app.autoRevert()
         } catch {
