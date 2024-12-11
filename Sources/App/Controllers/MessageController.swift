@@ -137,7 +137,12 @@ extension MessageController {
                     createdAt: message.createdAt
                 )
                 let data = try encoder.encode(messageResponse)
-                await self?.send(data: [UInt8](data), for: contactID, logger: req.logger, retry: 1)
+                await self?.send(
+                    data: [UInt8](data),
+                    for: contactID,
+                    logger: req.logger,
+                    retry: Constants.WEB_SOCKET_SEND_DATA_RETRY_COUNT
+                )
             } catch {
                 req.logger.error(Logger.Message(stringLiteral: error.localizedDescription))
             }
