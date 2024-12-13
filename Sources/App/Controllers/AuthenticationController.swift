@@ -36,9 +36,17 @@ struct AuthenticationController {
         }
         
         let user = registerRequest.toUserModel()
-        user.password = try await passwordHasher.hash(user.password)
-        user.avatarFilename = savedAvatarFilename
-        try await userRepository.create(user)
+        do {
+            user.password = try await passwordHasher.hash(user.password)
+            user.avatarFilename = savedAvatarFilename
+            try await userRepository.create(user)
+        } catch {
+            if let savedAvatarFilename {
+                try? await avatarFileSaver.delete(savedAvatarFilename)
+            }
+            
+            throw error
+        }
         
         return try await newTokenResponse(for: user, req: req)
     }

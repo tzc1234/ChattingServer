@@ -45,4 +45,11 @@ actor AvatarFileSaver {
         
         return avatarFilename
     }
+    
+    func delete(_ filename: String) throws {
+        let filePath = directoryPath + filename
+        if FileManager.default.fileExists(atPath: filePath) {
+            try FileManager.default.removeItem(atPath: filePath)
+        }
+    }
 }
