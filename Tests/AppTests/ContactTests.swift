@@ -78,7 +78,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 #expect(res.status == .ok)
                 
                 let contact = try res.content.decode(ContactResponse.self)
-                expect(contact: contact, as: await responder
+                expect(contact: contact, as: try await responder
                     .toResponse(app: app, directoryPath: testAvatarDirectoryPath)
                 )
             }
@@ -101,7 +101,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 #expect(res.status == .ok)
                 
                 let contact = try res.content.decode(ContactResponse.self)
-                expect(contact: contact, as: await responder
+                expect(contact: contact, as: try await responder
                     .toResponse(app: app, directoryPath: testAvatarDirectoryPath)
                 )
             }
@@ -327,7 +327,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 let contactResponse = try res.content.decode(ContactResponse.self)
                 expect(
                     contact: contactResponse,
-                    as: await anotherUser.toResponse(app: app, directoryPath: testAvatarDirectoryPath),
+                    as: try await anotherUser.toResponse(app: app, directoryPath: testAvatarDirectoryPath),
                     blockedByUserID: try currentUser.requireID()
                 )
             }
@@ -436,7 +436,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 let contactResponse = try res.content.decode(ContactResponse.self)
                 expect(
                     contact: contactResponse,
-                    as: await anotherUser.toResponse(app: app, directoryPath: testAvatarDirectoryPath)
+                    as: try await anotherUser.toResponse(app: app, directoryPath: testAvatarDirectoryPath)
                 )
             }
         }
@@ -536,7 +536,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         
         return await ContactResponse(
             id: try contact.requireID(),
-            responder: anotherUser.toResponse(app: app, directoryPath: testAvatarDirectoryPath),
+            responder: try anotherUser.toResponse(app: app, directoryPath: testAvatarDirectoryPath),
             blockedByUserID: nil,
             unreadMessageCount: try await repository.unreadMessagesCountFor(contact, senderIsNot: user.id!),
             lastUpdate: try await repository.lastUpdateFor(contact)!
@@ -588,9 +588,9 @@ struct ContactTests: AppTests, AvatarFileHelpers {
 }
 
 private extension User {
-    func toResponse(app: Application, directoryPath: String) async -> UserResponse {
-        let loader = try! AvatarLinkLoader(application: app, directoryPath: directoryPath)
-        return await toResponse { [weak loader] filename in
+    func toResponse(app: Application, directoryPath: String) async throws -> UserResponse {
+        let loader = try AvatarLinkLoader(application: app, directoryPath: directoryPath)
+        return try await toResponse { [weak loader] filename in
             guard let filename else { return nil }
             
             return await loader?.get(filename: filename)

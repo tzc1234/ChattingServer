@@ -1,7 +1,7 @@
 import Vapor
 
 struct UserResponse: Content, Equatable {
-    let id: Int?
+    let id: Int
     let name: String
     let email: String
     let avatarURL: String?

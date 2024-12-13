@@ -19,7 +19,7 @@ func createTokenResponse(_ app: Application,
     let user = try await createUser(app, name: name, email: email, hashedPassword: hashedPassword)
     let (accessToken, refreshToken) = try await generateTokens(for: user, app)
     return await TokenResponse(
-        user: user.toResponse(avatarLink: avatarLink),
+        user: try user.toResponse(avatarLink: avatarLink),
         accessToken: accessToken,
         refreshToken: refreshToken
     )

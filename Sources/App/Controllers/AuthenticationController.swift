@@ -76,7 +76,7 @@ struct AuthenticationController {
     private func newTokenResponse(for user: User, req: Request) async throws -> TokenResponse {
         let (accessToken, refreshToken) = try await generateNewTokens(for: user, req: req)
         return await TokenResponse(
-            user: user.toResponse { [weak avatarLinkLoader] filename in
+            user: try user.toResponse { [weak avatarLinkLoader] filename in
                 guard let filename else { return nil }
                 
                 return await avatarLinkLoader?.get(filename: filename)
@@ -105,7 +105,7 @@ struct AuthenticationController {
             throw AuthenticationError.userNotFound
         }
         
-        return await user.toResponse { [weak avatarLinkLoader] filename in
+        return try await user.toResponse { [weak avatarLinkLoader] filename in
             guard let filename else { return nil }
             
             return await avatarLinkLoader?.get(filename: filename)
