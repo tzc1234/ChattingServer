@@ -93,7 +93,7 @@ struct MessageTests: AppTests {
             
             try await app.test(.GET, messageAPIPath()) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
-                try req.query.encode(MessagesIndexRequest(limit: limit))
+                try req.query.encode(MessagesIndexRequest(beforeMessageID: nil, afterMessageID: nil, limit: limit))
             } afterResponse: { res async throws in
                 #expect(res.status == .ok)
                 
@@ -138,7 +138,7 @@ struct MessageTests: AppTests {
             
             try await app.test(.GET, messageAPIPath()) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
-                try req.query.encode(MessagesIndexRequest(beforeMessageID: 6, limit: 3))
+                try req.query.encode(MessagesIndexRequest(beforeMessageID: 6, afterMessageID: nil, limit: 3))
             } afterResponse: { res async throws in
                 #expect(res.status == .ok)
                 
@@ -183,7 +183,7 @@ struct MessageTests: AppTests {
             
             try await app.test(.GET, messageAPIPath()) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
-                try req.query.encode(MessagesIndexRequest(afterMessageID: 1, limit: 3))
+                try req.query.encode(MessagesIndexRequest(beforeMessageID: nil, afterMessageID: 1, limit: 3))
             } afterResponse: { res async throws in
                 #expect(res.status == .ok)
                 

@@ -1,9 +1,9 @@
 import Vapor
 
 struct MessagesIndexRequest: Content {
-    var beforeMessageID: Int?
-    var afterMessageID: Int?
-    var limit: Int?
+    let beforeMessageID: Int?
+    let afterMessageID: Int?
+    let limit: Int?
     
     enum CodingKeys: String, CodingKey {
         case beforeMessageID = "before_message_id"
