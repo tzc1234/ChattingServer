@@ -119,6 +119,7 @@ extension MessageController {
         ws.onBinary { [weak self] ws, data in
             let decoder = JSONDecoder()
             let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
             
             guard let incoming = try? decoder.decode(IncomingMessage.self, from: data) else {
                 try? await self?.close(ws, for: contactID, with: senderID)
