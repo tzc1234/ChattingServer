@@ -322,7 +322,9 @@ struct MessageTests: AppTests {
                 return promise.futureResult
             }.get()
             
-            let decoded = try JSONDecoder().decode(MessageResponse.self, from: data)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let decoded = try decoder.decode(MessageResponse.self, from: data)
             #expect(decoded.text == messageText)
         }
     }
