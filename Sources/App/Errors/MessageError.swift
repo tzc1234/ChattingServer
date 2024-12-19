@@ -12,7 +12,7 @@ enum MessageError: AbortError, DebuggableError {
         case .contactNotFound:
             .notFound
         case .contactIsBlocked:
-            .badRequest
+            .forbidden
         }
     }
     

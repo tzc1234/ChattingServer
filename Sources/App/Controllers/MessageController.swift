@@ -72,28 +72,18 @@ extension MessageController: RouteCollection {
             .grouped(AccessTokenGuardMiddleware(), UserAuthenticator())
         
         protected.get(use: index)
-        protected.webSocket("channel", shouldUpgrade: upgradeToMessagesChannel, onUpgrade: messagesChannel)
         protected.patch("read", use: readMessages)
+        
+        let protectedWebSocket = protected.grouped(MessageChannelContactValidationMiddleware(contactRepository: contactRepository))
+        protectedWebSocket.webSocket("channel", shouldUpgrade: upgradeToMessagesChannel, onUpgrade: messagesChannel)
     }
 }
 
 extension MessageController {
     @Sendable
     private func upgradeToMessagesChannel(req: Request) async throws -> HTTPHeaders? {
-        let userID = try req.auth.require(Payload.self).userID
-        let contactID = try validateContactID(req: req)
-        
-        guard let contact = try await contactRepository.findBy(id: contactID, userID: userID) else {
-            throw MessageError.contactNotFound
-        }
-        
-        guard contact.$blockedBy.id == nil else {
-            throw MessageError.contactIsBlocked
-        }
-        
-        self.contactID = contactID
-        self.senderID = userID
-        
+        senderID = try req.auth.require(Payload.self).userID
+        contactID = try validateContactID(req: req)
         return [:]
     }
     
