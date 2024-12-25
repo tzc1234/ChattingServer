@@ -123,7 +123,7 @@ struct AuthenticationController {
 
 extension AuthenticationController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {
-        routes.on(.POST, "register", body: .collect(maxSize: "1mb"), use: register)
+        routes.on(.POST, "register", body: .collect(maxSize: "2mb"), use: register)
         routes.post("login", use: login)
         routes.post("refreshToken", use: refreshToken)
         
