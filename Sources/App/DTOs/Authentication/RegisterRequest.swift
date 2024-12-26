@@ -12,7 +12,7 @@ extension RegisterRequest {
     func toUserModel() -> User {
         let model = User()
         model.name = name
-        model.email = email
+        model.email = email.lowercased()
         model.password = password
         return model
     }
