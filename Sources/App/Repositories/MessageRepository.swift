@@ -18,6 +18,15 @@ actor MessageRepository {
                      beforeMessageId: Int?,
                      afterMessageId: Int?,
                      limit: Int) async throws -> [Message] {
+        if beforeMessageId == nil && afterMessageId == nil,
+            let firstUnreadMessageID = try await firstUnreadMessageID(contactID: contactID, senderIDIsNot: userID) {
+            return try await getMessagesWith(
+                firstUnreadMessageID: firstUnreadMessageID,
+                contactID: contactID,
+                limit: limit
+            )
+        }
+        
         return try await sqlDatabase().select()
             .column(SQLLiteral.all)
             .from(messageSubquery(
@@ -50,10 +59,6 @@ actor MessageRepository {
             messageSubquery
                 .where("id", .greaterThan, afterMessageId)
                 .orderBy("id", .ascending)
-        } else if let middleMessageID = try await middleMessageID(userID: userID, contactID: contactID, limit: limit) {
-            messageSubquery
-                .where("id", .greaterThanOrEqual, middleMessageID)
-                .orderBy("id", .ascending)
         } else {
             messageSubquery
                 .orderBy("id", .descending)
@@ -62,35 +67,59 @@ actor MessageRepository {
         return messageSubquery.limit(limit).query
     }
     
-    private func middleMessageID(userID: UserID, contactID: ContactID, limit: Int) async throws -> Int? {
+    private func getMessagesWith(firstUnreadMessageID: Int, contactID: ContactID, limit: Int) async throws -> [Message] {
         let middle = limit / 2 + 1
-        let middleMessageIDAtLast = SQLSubqueryBuilder()
-            .column("id")
-            .from("messages")
-            .where("id", .lessThanOrEqual, firstUnreadMessageIDSubquery(contactID: contactID, senderIDIsNot: userID))
-            .where("contact_id", .equal, contactID)
-            .orderBy("id", .descending)
-            .limit(middle)
-            .query
+        let contactIDClause = "AND contact_id = \(contactID)"
+        let maxMessageID = """
+            SELECT max(id) AS id, count(id) AS count FROM (
+                SELECT id FROM messages
+                WHERE id >= \(firstUnreadMessageID)
+                \(contactIDClause)
+                LIMIT \(middle)
+            )
+        """
+        let minMessageID = """
+            SELECT min(id) AS id, count(id) AS count FROM (
+                SELECT id FROM messages
+                WHERE id < \(firstUnreadMessageID)
+                \(contactIDClause)
+                ORDER BY id DESC
+                LIMIT \(limit) - (SELECT count FROM max_message_id)
+            )
+        """
+        let updatedMaxMessageID = """
+            SELECT max(id) AS id FROM (
+                SELECT id FROM messages
+                WHERE id >= \(firstUnreadMessageID)
+                \(contactIDClause)
+                LIMIT \(limit) - (SELECT count FROM min_message_id)
+            )
+        """
+        let withClause = """
+            WITH max_message_id AS (\(maxMessageID)), min_message_id AS (\(minMessageID)),
+            updated_max_message_id AS (\(updatedMaxMessageID))
+        """
+        let sql = """
+            \(withClause)
+            SELECT * FROM messages
+            WHERE id BETWEEN (SELECT id FROM min_message_id)
+            AND (SELECT id FROM updated_max_message_id)
+            ORDER BY id ASC
+        """
         
-        return try await sqlDatabase().select()
-            .column("id")
-            .from(middleMessageIDAtLast)
-            .orderBy("id", .ascending)
-            .limit(1)
-            .first()?
-            .decode(column: "id", inferringAs: Int.self)
+        return try await sqlDatabase()
+            .raw("\(unsafeRaw: sql)")
+            .all()
+            .map(decodeToMessage)
     }
     
-    private func firstUnreadMessageIDSubquery(contactID: ContactID, senderIDIsNot userID: UserID) -> SQLSubquery {
-        SQLSubqueryBuilder()
-            .column("id")
-            .from("messages")
-            .where("contact_id", .equal, contactID)
-            .where("sender_id", .notEqual, userID)
-            .where("is_read", .equal, false)
-            .limit(1)
-            .query
+    private func firstUnreadMessageID(contactID: ContactID, senderIDIsNot userID: UserID) async throws -> Int? {
+        try await Message.query(on: database)
+            .filter(\.$contact.$id == contactID)
+            .filter(\.$sender.$id != userID)
+            .filter(\.$isRead == false)
+            .first()?
+            .id
     }
     
     private func decodeToMessage(_ row: SQLRow) throws -> Message {
