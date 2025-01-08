@@ -14,42 +14,21 @@ actor ContactRepository {
     }
     
     func getContacts(for userID: Int, before: Date?, limit: Int) async throws -> [Contact] {
-        let contactTable = SQLQualifiedTable(Contact.schema, space: Contact.space)
-        let messageTable = SQLQualifiedTable(Message.schema, space: Message.space)
+        let beforeLastUpdate: SQLQueryString = before.map { "AND last_update < \(bind: $0.timeIntervalSince1970)" } ??
+            SQLQueryString("")
+        let sql: SQLQueryString = """
+            SELECT c.*, ifnull(max(m.created_at), c.created_at) AS last_update
+            FROM contacts c
+            LEFT JOIN messages m ON m.contact_id = c.id
+            GROUP BY c.id
+            HAVING (c.user_id1 = \(bind: userID) OR c.user_id2 = \(bind: userID))
+            \(beforeLastUpdate)
+            ORDER BY last_update DESC
+            LIMIT \(bind: limit)
+        """
         
-        let contactAllColumns = SQLColumn(SQLLiteral.all, table: contactTable)
-        let contactIDColumn = SQLColumn(SQLLiteral.string("id"), table: contactTable)
-        let messageContactIDColumn = SQLColumn(SQLLiteral.string("contact_id"), table: messageTable)
-        let userIDNumeric = SQLLiteral.numeric("\(userID)")
-        
-        let createdAtLiteral = SQLLiteral.string("created_at")
-        let messageCreatedAtColumn = SQLColumn(createdAtLiteral, table: messageTable)
-        let contactCreatedAtColumn = SQLColumn(createdAtLiteral, table: contactTable)
-        let maxMessageCreatedAtFunction = SQLFunction("max", args: messageCreatedAtColumn)
-        let maxMessageCreatedAtFallbackToContactCreatedAtFunction = SQLFunction("ifnull",
-            args: maxMessageCreatedAtFunction, contactCreatedAtColumn
-        )
-        let lastUpdate = "last_update"
-        let contactUserID1Column = SQLColumn(SQLLiteral.string("user_id1"), table: contactTable)
-        let contactUserID2Column = SQLColumn(SQLLiteral.string("user_id2"), table: contactTable)
-        
-        return try await sqlDatabase().select()
-            .column(contactAllColumns)
-            .column(maxMessageCreatedAtFallbackToContactCreatedAtFunction, as: lastUpdate)
-            .from(contactTable)
-            .join(
-                messageTable,
-                method: SQLJoinMethod.left,
-                on: contactIDColumn,
-                .equal,
-                messageContactIDColumn
-            )
-            .groupBy(contactIDColumn)
-            .having(lastUpdate, lessThan: before)
-            .having(contactUserID1Column, .equal, userIDNumeric)
-            .orHaving(contactUserID2Column, .equal, userIDNumeric)
-            .orderBy(lastUpdate, .descending)
-            .limit(limit)
+        return try await sqlDatabase()
+            .raw(sql)
             .all()
             .map(decodeToContact)
     }
