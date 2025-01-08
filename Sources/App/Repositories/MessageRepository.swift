@@ -102,7 +102,7 @@ actor MessageRepository {
         let sql = """
             \(withClause)
             SELECT * FROM messages
-            WHERE id BETWEEN (SELECT id FROM min_message_id)
+            WHERE id BETWEEN ifnull((SELECT id FROM min_message_id), 1)
             AND (SELECT id FROM updated_max_message_id)
             ORDER BY id ASC
         """
