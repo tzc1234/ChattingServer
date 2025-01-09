@@ -68,52 +68,47 @@ actor MessageRepository {
     }
     
     private func getMessagesWith(firstUnreadMessageID: Int, contactID: ContactID, limit: Int) async throws -> [Message] {
-        // Use the first unread messageID as pivot.
-        // First find the top boundary, than find the bottom boundary.
-        // After that, adjust the top boundary depends on the count of the bottom boundary.
-        // Ensure the final result count within the limit.
         let middle = limit / 2 + 1
-        let contactIDClause: SQLQueryString = "AND contact_id = \(bind: contactID)"
-        let topBoundaryCount: SQLQueryString = """
-            SELECT count(id) AS count FROM (
-                SELECT id FROM messages
-                WHERE id <= \(bind: firstUnreadMessageID)
-                \(contactIDClause)
-                ORDER BY id DESC
-                LIMIT \(bind: middle)
-            )
-        """
-        let maxMessageID: SQLQueryString = """
+        let contactIDClause = "AND contact_id = \(contactID)"
+        let maxMessageID = """
             SELECT max(id) AS id, count(id) AS count FROM (
                 SELECT id FROM messages
-                WHERE id > \(bind: firstUnreadMessageID)
+                WHERE id >= \(firstUnreadMessageID)
                 \(contactIDClause)
-                LIMIT \(bind: limit) - (\(topBoundaryCount))
+                LIMIT \(middle)
             )
         """
-        let minMessageID: SQLQueryString = """
-            SELECT min(id) AS id FROM (
+        let minMessageID = """
+            SELECT min(id) AS id, count(id) AS count FROM (
                 SELECT id FROM messages
-                WHERE id <= \(bind: firstUnreadMessageID)
+                WHERE id < \(firstUnreadMessageID)
                 \(contactIDClause)
                 ORDER BY id DESC
-                LIMIT \(bind: limit) - (SELECT count FROM max_message_id)
+                LIMIT \(limit) - (SELECT count FROM max_message_id)
             )
         """
-        let withClause: SQLQueryString = """
-            WITH max_message_id AS (\(maxMessageID)),
-            min_message_id AS (\(minMessageID))
+        let updatedMaxMessageID = """
+            SELECT max(id) AS id FROM (
+                SELECT id FROM messages
+                WHERE id >= \(firstUnreadMessageID)
+                \(contactIDClause)
+                LIMIT \(limit) - (SELECT count FROM min_message_id)
+            )
         """
-        let sql: SQLQueryString = """
+        let withClause = """
+            WITH max_message_id AS (\(maxMessageID)), min_message_id AS (\(minMessageID)),
+            updated_max_message_id AS (\(updatedMaxMessageID))
+        """
+        let sql = """
             \(withClause)
             SELECT * FROM messages
-            WHERE id BETWEEN (SELECT id FROM min_message_id) AND (SELECT id FROM max_message_id)
-            \(contactIDClause)
+            WHERE id BETWEEN ifnull((SELECT id FROM min_message_id), 1)
+            AND (SELECT id FROM updated_max_message_id)
             ORDER BY id ASC
         """
         
         return try await sqlDatabase()
-            .raw(sql)
+            .raw("\(unsafeRaw: sql)")
             .all()
             .map(decodeToMessage)
     }
