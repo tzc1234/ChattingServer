@@ -69,37 +69,37 @@ actor MessageRepository {
     
     private func getMessagesWith(firstUnreadMessageID: Int, contactID: ContactID, limit: Int) async throws -> [Message] {
         let middle = limit / 2 + 1
-        let contactIDClause = "AND contact_id = \(contactID)"
-        let maxMessageID = """
+        let contactIDClause: SQLQueryString = "AND contact_id = \(bind: contactID)"
+        let maxMessageID: SQLQueryString = """
             SELECT max(id) AS id, count(id) AS count FROM (
                 SELECT id FROM messages
-                WHERE id >= \(firstUnreadMessageID)
+                WHERE id >= \(bind: firstUnreadMessageID)
                 \(contactIDClause)
-                LIMIT \(middle)
+                LIMIT \(bind: middle)
             )
         """
-        let minMessageID = """
+        let minMessageID: SQLQueryString = """
             SELECT min(id) AS id, count(id) AS count FROM (
                 SELECT id FROM messages
-                WHERE id < \(firstUnreadMessageID)
+                WHERE id < \(bind: firstUnreadMessageID)
                 \(contactIDClause)
                 ORDER BY id DESC
-                LIMIT \(limit) - (SELECT count FROM max_message_id)
+                LIMIT \(bind: limit) - (SELECT count FROM max_message_id)
             )
         """
-        let updatedMaxMessageID = """
+        let updatedMaxMessageID: SQLQueryString = """
             SELECT max(id) AS id FROM (
                 SELECT id FROM messages
-                WHERE id >= \(firstUnreadMessageID)
+                WHERE id >= \(bind: firstUnreadMessageID)
                 \(contactIDClause)
-                LIMIT \(limit) - (SELECT count FROM min_message_id)
+                LIMIT \(bind: limit) - (SELECT count FROM min_message_id)
             )
         """
-        let withClause = """
+        let withClause: SQLQueryString = """
             WITH max_message_id AS (\(maxMessageID)), min_message_id AS (\(minMessageID)),
             updated_max_message_id AS (\(updatedMaxMessageID))
         """
-        let sql = """
+        let sql: SQLQueryString = """
             \(withClause)
             SELECT * FROM messages
             WHERE id BETWEEN ifnull((SELECT id FROM min_message_id), 1)
@@ -108,7 +108,7 @@ actor MessageRepository {
         """
         
         return try await sqlDatabase()
-            .raw("\(unsafeRaw: sql)")
+            .raw(sql)
             .all()
             .map(decodeToMessage)
     }
