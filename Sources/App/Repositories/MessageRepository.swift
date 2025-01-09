@@ -88,7 +88,7 @@ actor MessageRepository {
                 SELECT id FROM messages
                 WHERE id > \(bind: firstUnreadMessageID)
                 \(contactIDClause)
-                LIMIT \(bind: limit) - (SELECT count FROM (\(topBoundaryCount)))
+                LIMIT \(bind: limit) - (\(topBoundaryCount))
             )
         """
         let minMessageID: SQLQueryString = """
