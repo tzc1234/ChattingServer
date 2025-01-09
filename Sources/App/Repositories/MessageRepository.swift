@@ -104,6 +104,7 @@ actor MessageRepository {
             SELECT * FROM messages
             WHERE id BETWEEN ifnull((SELECT id FROM min_message_id), 1)
             AND (SELECT id FROM updated_max_message_id)
+            \(contactIDClause)
             ORDER BY id ASC
         """
         
