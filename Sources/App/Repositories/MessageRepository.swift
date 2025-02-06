@@ -27,7 +27,8 @@ actor MessageRepository {
             )
         }
         
-        return try await sqlDatabase().select()
+        return try await sqlDatabase()
+            .select()
             .column(SQLLiteral.all)
             .from(messageSubquery(
                 contactID: contactID,
@@ -72,7 +73,7 @@ actor MessageRepository {
         let sql = SQLQueryString.build {
             SQLQueryString.withClause {
                 SQLQueryString("""
-                    message_id_count_from_middle AS (
+                    message_id_count_derived_from_middle AS (
                         SELECT count(id) AS count FROM (
                             SELECT id FROM messages
                             WHERE id >= \(bind: firstUnreadMessageID)
@@ -88,7 +89,7 @@ actor MessageRepository {
                             WHERE id < \(bind: firstUnreadMessageID)
                             AND contact_id = \(bind: contactID)
                             ORDER BY id DESC
-                            LIMIT \(bind: limit) - (SELECT count FROM message_id_count_from_middle)
+                            LIMIT \(bind: limit) - (SELECT count FROM message_id_count_derived_from_middle)
                         )
                     )
                 """)
@@ -103,7 +104,6 @@ actor MessageRepository {
                     )
                 """)
             }
-            
             SQLQueryString("""
                 SELECT * FROM messages
                 WHERE id BETWEEN ifnull((SELECT id FROM lower_bound_message_id), 1)
@@ -150,22 +150,5 @@ actor MessageRepository {
     
     func create(_ message: Message) async throws {
         try await message.create(on: database)
-    }
-}
-
-extension SQLQueryString {
-    static func build(@SQLQueryStringBuilder sql: () -> [SQLQueryString]) -> SQLQueryString {
-        sql().joined(separator: "\n")
-    }
-    
-    static func withClause(@SQLQueryStringBuilder sql: () -> [SQLQueryString]) -> SQLQueryString {
-        "WITH " + sql().joined(separator: ", ")
-    }
-}
-
-@resultBuilder
-enum SQLQueryStringBuilder {
-    static func buildBlock(_ components: SQLQueryString...) -> [SQLQueryString] {
-        components
     }
 }
