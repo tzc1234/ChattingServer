@@ -548,7 +548,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             blockedByUserID: nil,
             unreadMessageCount: await repository.unreadMessagesCountFor(contact, senderIsNot: user.id!),
             lastUpdate: await repository.lastUpdateFor(contact)!,
-            lastMessageText: await repository.lastMessageTextFor(contact)
+            lastMessageText: await repository.lastMessageTextFor(contact, senderIsNot: user.id!)
         )
     }
     
