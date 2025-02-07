@@ -14,8 +14,7 @@ actor ContactRepository {
     }
     
     func getContacts(for userID: Int, before: Date?, limit: Int) async throws -> [Contact] {
-        let beforeLastUpdate: SQLQueryString = before.map { "AND last_update < \(bind: $0.timeIntervalSince1970)" } ??
-            SQLQueryString("")
+        let beforeLastUpdate: SQLQueryString = before.map { "AND last_update < \(bind: $0.timeIntervalSince1970)" } ?? ""
         let sql: SQLQueryString = """
             SELECT c.*, ifnull(max(m.created_at), c.created_at) AS last_update
             FROM contacts c
@@ -83,6 +82,13 @@ actor ContactRepository {
             .filter(\.$isRead == false)
             .filter(\.$sender.$id != userID)
             .count()
+    }
+    
+    func lastMessageTextFor(_ contact: Contact) async throws -> String? {
+        try await contact.$messages.query(on: database)
+            .sort(\.$createdAt, .descending)
+            .first()?
+            .text
     }
 }
 

@@ -161,12 +161,13 @@ private extension Contact {
             throw ContactError.databaseError
         }
         
-        return try ContactResponse(
+        return try await ContactResponse(
             id: requireID(),
-            responder: await responder(by: currentUserID, on: contactRepository).toResponse(avatarLink: avatarLink),
+            responder: responder(by: currentUserID, on: contactRepository).toResponse(avatarLink: avatarLink),
             blockedByUserID: $blockedBy.id,
-            unreadMessageCount: await contactRepository.unreadMessagesCountFor(self, senderIsNot: currentUserID),
-            lastUpdate: lastUpdate
+            unreadMessageCount: contactRepository.unreadMessagesCountFor(self, senderIsNot: currentUserID),
+            lastUpdate: lastUpdate,
+            lastMessageText: contactRepository.lastMessageTextFor(self)
         )
     }
     

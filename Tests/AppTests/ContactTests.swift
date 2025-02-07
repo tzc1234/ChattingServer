@@ -184,6 +184,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 user: currentUser,
                 anotherUser: anotherUser1,
                 senderID: try currentUser.requireID(),
+                text: "text 100",
                 lastUpdate: beforeDate.reducing(seconds: 1)
             )
             let equalToBeforeDateContact = makeContactDetail(
@@ -191,6 +192,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 user: currentUser,
                 anotherUser: anotherUser2,
                 senderID: try anotherUser2.requireID(),
+                text: "text 200",
                 lastUpdate: beforeDate
             )
             let greaterThanBeforeDateContact = makeContactDetail(
@@ -198,6 +200,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 user: currentUser,
                 anotherUser: anotherUser3,
                 senderID: try anotherUser3.requireID(),
+                text: "text 300",
                 lastUpdate: beforeDate.adding(seconds: 1)
             )
             let smallerThanBeforeDateContact2 = makeContactDetail(
@@ -205,6 +208,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 user: currentUser,
                 anotherUser: anotherUser4,
                 senderID: try anotherUser4.requireID(),
+                text: "text 400",
                 lastUpdate: beforeDate.reducing(seconds: 1)
             )
             let nonCurrentUserContact = makeContactDetail(
@@ -212,6 +216,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 user: anotherUser1,
                 anotherUser: anotherUser2,
                 senderID: try anotherUser1.requireID(),
+                text: "text 500",
                 lastUpdate: beforeDate.reducing(seconds: 1)
             )
             
@@ -481,6 +486,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             Int(contact.lastUpdate.timeIntervalSince1970) == Int(expected.lastUpdate.timeIntervalSince1970),
             sourceLocation: sourceLocation
         )
+        #expect(contact.lastMessageText == expected.lastMessageText, sourceLocation: sourceLocation)
     }
     
     private func expect(contact: ContactResponse,
@@ -539,7 +545,8 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             responder: try anotherUser.toResponse(app: app, directoryPath: testAvatarDirectoryPath),
             blockedByUserID: nil,
             unreadMessageCount: try await repository.unreadMessagesCountFor(contact, senderIsNot: user.id!),
-            lastUpdate: try await repository.lastUpdateFor(contact)!
+            lastUpdate: try await repository.lastUpdateFor(contact)!,
+            lastMessageText: try await repository.lastMessageTextFor(contact)
         )
     }
     
