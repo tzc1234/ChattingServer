@@ -492,6 +492,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
     private func expect(contact: ContactResponse,
                         as responder: UserResponse,
                         blockedByUserID: Int? = nil,
+                        lastMessageText: String? = nil,
                         sourceLocation: SourceLocation = #_sourceLocation) {
         #expect(contact.responder.email == responder.email, sourceLocation: sourceLocation)
         #expect(contact.responder.name == responder.name, sourceLocation: sourceLocation)
@@ -499,19 +500,20 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         #expect(contact.responder.avatarURL == responder.avatarURL, sourceLocation: sourceLocation)
         #expect(contact.blockedByUserID == blockedByUserID, sourceLocation: sourceLocation)
         #expect(contact.unreadMessageCount == 0, sourceLocation: sourceLocation)
+        #expect(contact.lastMessageText == lastMessageText, sourceLocation: sourceLocation)
     }
     
     private func makeContactDetail(id: Int? = nil,
                                    user: User,
                                    anotherUser: User,
                                    senderID: Int,
-                                   text: String = "any text",
-                                   lastUpdate: Date = .now) -> ContactDetail {
-        let messageDetail = MessageDetail(senderID: senderID, text: text, lastUpdate: lastUpdate)
-        return ContactDetail(id: id, user: user, anotherUser: anotherUser, messageDetails: [messageDetail])
+                                   text: String,
+                                   lastUpdate: Date = .now) -> ContactDetailForTest {
+        let messageDetail = ContactDetailForTest.Message(senderID: senderID, text: text, lastUpdate: lastUpdate)
+        return ContactDetailForTest(id: id, user: user, anotherUser: anotherUser, messageDetails: [messageDetail])
     }
     
-    private func createContactResponses(contactDetails: [ContactDetail],
+    private func createContactResponses(contactDetails: [ContactDetailForTest],
                                         app: Application) async throws -> [ContactResponse] {
         var contacts = [ContactResponse]()
         for detail in contactDetails {
@@ -529,8 +531,9 @@ struct ContactTests: AppTests, AvatarFileHelpers {
     private func createContactResponse(id: Int? = nil,
                                        user: User,
                                        anotherUser: User,
-                                       messageDetails: [MessageDetail] = [],
+                                       messageDetails: [ContactDetailForTest.Message] = [],
                                        app: Application) async throws -> ContactResponse {
+        let repository = ContactRepository(database: app.db)
         let contact = try await createContact(
             id: id,
             user: user,
@@ -538,15 +541,14 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             messageDetails: messageDetails,
             app: app
         )
-        let repository = ContactRepository(database: app.db)
         
-        return await ContactResponse(
-            id: try contact.requireID(),
-            responder: try anotherUser.toResponse(app: app, directoryPath: testAvatarDirectoryPath),
+        return try await ContactResponse(
+            id: contact.requireID(),
+            responder: anotherUser.toResponse(app: app, directoryPath: testAvatarDirectoryPath),
             blockedByUserID: nil,
-            unreadMessageCount: try await repository.unreadMessagesCountFor(contact, senderIsNot: user.id!),
-            lastUpdate: try await repository.lastUpdateFor(contact)!,
-            lastMessageText: try await repository.lastMessageTextFor(contact)
+            unreadMessageCount: await repository.unreadMessagesCountFor(contact, senderIsNot: user.id!),
+            lastUpdate: await repository.lastUpdateFor(contact)!,
+            lastMessageText: await repository.lastMessageTextFor(contact)
         )
     }
     
@@ -554,7 +556,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                                user: User,
                                anotherUser: User,
                                blockedByUserID: Int? = nil,
-                               messageDetails: [MessageDetail] = [],
+                               messageDetails: [ContactDetailForTest.Message] = [],
                                app: Application) async throws -> Contact {
         let contact = try Contact(
             id: id,
@@ -580,17 +582,17 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         return contact
     }
     
-    private struct MessageDetail {
-        let senderID: Int
-        let text: String
-        let lastUpdate: Date
-    }
-    
-    private struct ContactDetail {
+    private struct ContactDetailForTest {
+        struct Message {
+            let senderID: Int
+            let text: String
+            let lastUpdate: Date
+        }
+        
         let id: Int?
         let user: User
         let anotherUser: User
-        let messageDetails: [MessageDetail]
+        let messageDetails: [Message]
     }
 }
 
