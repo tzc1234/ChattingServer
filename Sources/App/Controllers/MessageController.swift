@@ -31,8 +31,7 @@ actor MessageController {
         let messages = try await messageRepository.getMessages(
             contactID: contactID,
             userID: userID,
-            beforeMessageId: indexRequest.beforeMessageID,
-            afterMessageId: indexRequest.afterMessageID,
+            messageID: MessageRepository.MessageID(indexRequest: indexRequest),
             limit: indexRequest.limit ?? defaultLimit
         )
         return MessagesResponse(messages: try messages.map { try $0.toResponse() })
@@ -170,5 +169,21 @@ private extension Message {
             isRead: isRead,
             createdAt: createdAt
         )
+    }
+}
+
+private extension MessageRepository.MessageID {
+    init?(indexRequest: MessagesIndexRequest) {
+        if let beforeID = indexRequest.beforeMessageID {
+            self = .before(beforeID)
+            return
+        }
+        
+        if let afterID = indexRequest.afterMessageID {
+            self = .after(afterID)
+            return
+        }
+        
+        return nil
     }
 }

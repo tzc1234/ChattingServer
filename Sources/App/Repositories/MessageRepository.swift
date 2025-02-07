@@ -3,6 +3,11 @@ import Fluent
 import SQLKit
 
 actor MessageRepository {
+    enum MessageID {
+        case before(Int)
+        case after(Int)
+    }
+    
     private let database: Database
     
     init(database: Database) {
@@ -15,11 +20,10 @@ actor MessageRepository {
     
     func getMessages(contactID: ContactID,
                      userID: UserID,
-                     beforeMessageId: Int?,
-                     afterMessageId: Int?,
+                     messageID: MessageID?,
                      limit: Int) async throws -> [Message] {
-        if beforeMessageId == nil && afterMessageId == nil,
-            let firstUnreadMessageID = try await firstUnreadMessageID(contactID: contactID, senderIDIsNot: userID) {
+        if messageID == nil,
+           let firstUnreadMessageID = try await firstUnreadMessageID(contactID: contactID, senderIDIsNot: userID) {
             return try await getMessagesWith(
                 firstUnreadMessageID: firstUnreadMessageID,
                 contactID: contactID,
@@ -30,13 +34,14 @@ actor MessageRepository {
         return try await sqlDatabase()
             .select()
             .column(SQLLiteral.all)
-            .from(messageSubquery(
-                contactID: contactID,
-                userID: userID,
-                beforeMessageId: beforeMessageId,
-                afterMessageId: afterMessageId,
-                limit: limit
-            ))
+            .from(
+                messageSubquery(
+                    contactID: contactID,
+                    userID: userID,
+                    messageID: messageID,
+                    limit: limit
+                )
+            )
             .orderBy("id", .ascending)
             .all()
             .map(decodeToMessage)
@@ -44,23 +49,23 @@ actor MessageRepository {
     
     private func messageSubquery(contactID: ContactID,
                                  userID: UserID,
-                                 beforeMessageId: Int?,
-                                 afterMessageId: Int?,
+                                 messageID: MessageID?,
                                  limit: Int) async throws -> SQLSubquery {
         var messageSubquery = SQLSubqueryBuilder()
             .column(SQLLiteral.all)
             .from("messages")
             .where("contact_id", .equal, contactID)
         
-        messageSubquery = if let beforeMessageId {
+        messageSubquery = switch messageID {
+        case let .before(id):
             messageSubquery
-                .where("id", .lessThan, beforeMessageId)
+                .where("id", .lessThan, id)
                 .orderBy("id", .descending)
-        } else if let afterMessageId {
+        case let .after(id):
             messageSubquery
-                .where("id", .greaterThan, afterMessageId)
+                .where("id", .greaterThan, id)
                 .orderBy("id", .ascending)
-        } else {
+        case .none:
             messageSubquery
                 .orderBy("id", .descending)
         }
