@@ -20,7 +20,7 @@ actor MessageController {
     
     @Sendable
     private func index(req: Request) async throws -> MessagesResponse {
-        let contactID = try validateContactID(req: req)
+        let contactID = try validateContactIDFormat(req: req)
         let userID = try req.auth.require(Payload.self).userID
         let indexRequest = try req.query.decode(MessagesIndexRequest.self)
         
@@ -40,7 +40,7 @@ actor MessageController {
     @Sendable
     private func readMessages(req: Request) async throws -> Response {
         let userID = try req.auth.require(Payload.self).userID
-        let contactID = try validateContactID(req: req)
+        let contactID = try validateContactIDFormat(req: req)
         let untilMessageID = try req.content.decode(ReadMessageRequest.self).untilMessageID
         
         guard try await contactRepository.isContactExited(id: contactID, withUserID: userID) else {
@@ -56,7 +56,7 @@ actor MessageController {
         return Response()
     }
     
-    private func validateContactID(req: Request) throws -> ContactID {
+    private func validateContactIDFormat(req: Request) throws -> ContactID {
         guard let contactIDString = req.parameters.get("contact_id"), let contactID = Int(contactIDString) else {
             throw MessageError.contactIDInvalid
         }
@@ -82,7 +82,7 @@ extension MessageController {
     @Sendable
     private func upgradeToMessagesChannel(req: Request) async throws -> HTTPHeaders? {
         senderID = try req.auth.require(Payload.self).userID
-        contactID = try validateContactID(req: req)
+        contactID = try validateContactIDFormat(req: req)
         return [:]
     }
     
@@ -96,9 +96,7 @@ extension MessageController {
         await webSocketStore.add(ws, for: contactID, with: senderID)
         
         ws.onClose.whenComplete { [weak webSocketStore] _ in
-            Task {
-                await webSocketStore?.remove(for: contactID, with: senderID)
-            }
+            Task { await webSocketStore?.remove(for: contactID, with: senderID) }
         }
         
         ws.onText { [weak self] ws, text in
@@ -106,18 +104,16 @@ extension MessageController {
         }
         
         ws.onBinary { [weak self] ws, data in
-            let decoder = JSONDecoder()
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
+            guard let self else { return }
             
-            guard let incoming = try? decoder.decode(IncomingMessage.self, from: data) else {
-                try? await self?.close(ws, for: contactID, with: senderID)
+            guard let incoming = try? JSONDecoder().decode(IncomingMessage.self, from: data) else {
+                try? await close(ws, for: contactID, with: senderID)
                 return
             }
             
             let message = Message(contactID: contactID, senderID: senderID, text: incoming.text)
             do {
-                try await self?.messageRepository.create(message)
+                try await messageRepository.create(message)
                 
                 let messageResponse = MessageResponse(
                     id: try message.requireID(),
@@ -126,8 +122,12 @@ extension MessageController {
                     isRead: message.isRead,
                     createdAt: message.createdAt
                 )
+                
+                let encoder = JSONEncoder()
+                encoder.dateEncodingStrategy = .iso8601
                 let data = try encoder.encode(messageResponse)
-                await self?.send(
+                
+                await send(
                     data: [UInt8](data),
                     for: contactID,
                     logger: req.logger,
