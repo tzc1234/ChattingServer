@@ -55,7 +55,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 req.headers.bearerAuthorization = BearerAuthorization(token: token.accessToken)
                 try req.content.encode(contactRequest)
             } afterResponse: { res async throws in
-                #expect(res.status == .conflict)
+                #expect(res.status == .badRequest)
                 let error = try res.content.decode(ErrorResponse.self)
                 #expect(error.reason == "Responder cannot be the same as current user")
             }
