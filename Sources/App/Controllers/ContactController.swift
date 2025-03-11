@@ -58,17 +58,7 @@ struct ContactController {
             throw ContactError.responderSameAsCurrentUser
         }
         
-        return try await createNewContact(with: currentUserID, and: responderID)
-    }
-    
-    private func createNewContact(with currentUserID: Int, and responderID: Int) async throws -> Contact {
-        let contact = if currentUserID < responderID {
-            Contact(userID1: currentUserID, userID2: responderID)
-        } else {
-            Contact(userID1: responderID, userID2: currentUserID)
-        }
-        try await contactRepository.create(contact)
-        return contact
+        return try await contactRepository.create(by: currentUserID, and: responderID)
     }
     
     @Sendable
