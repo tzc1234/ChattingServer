@@ -74,8 +74,7 @@ struct ContactController {
             throw ContactError.contactAlreadyBlocked
         }
         
-        contact.$blockedBy.id = currentUserID
-        try await contactRepository.update(contact)
+        try await contactRepository.update(contact, blockedByUserID: currentUserID)
         
         return try await contactResponse(with: contact, currentUserID: currentUserID)
     }
@@ -96,8 +95,7 @@ struct ContactController {
             throw ContactError.contactIsNotBlockedByCurrentUser
         }
         
-        contact.$blockedBy.id = nil
-        try await contactRepository.update(contact)
+        try await contactRepository.update(contact, blockedByUserID: nil)
         
         return try await contactResponse(with: contact, currentUserID: currentUserID)
     }

@@ -52,7 +52,8 @@ actor ContactRepository {
         return contact
     }
     
-    func update(_ contact: Contact) async throws {
+    func update(_ contact: Contact, blockedByUserID: Int?) async throws {
+        contact.$blockedBy.id = blockedByUserID
         try await contact.update(on: database)
     }
     
