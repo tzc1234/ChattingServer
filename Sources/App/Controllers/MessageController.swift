@@ -141,7 +141,7 @@ extension MessageController {
         }
     }
     
-    private func send(data: [UInt8], for contactID: ContactID, logger: Logger, retry: UInt = 0) async {
+    private func send(data: [UInt8], for contactID: ContactID, logger: Logger, retry: UInt) async {
         for webSocket in await webSocketStore.get(for: contactID) {
             do {
                 try await webSocket.send(data)
