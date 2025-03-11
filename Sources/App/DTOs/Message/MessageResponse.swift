@@ -5,7 +5,7 @@ struct MessageResponse: Content, Equatable {
     let text: String
     let senderID: Int
     let isRead: Bool
-    let createdAt: Date?
+    let createdAt: Date
     
     enum CodingKeys: String, CodingKey {
         case id

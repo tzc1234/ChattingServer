@@ -73,7 +73,8 @@ extension MessageController: RouteCollection {
         protected.get(use: index)
         protected.patch("read", use: readMessages)
         
-        let protectedWebSocket = protected.grouped(MessageChannelContactValidationMiddleware(contactRepository: contactRepository))
+        let protectedWebSocket = protected
+            .grouped(MessageChannelContactValidationMiddleware(contactRepository: contactRepository))
         protectedWebSocket.webSocket("channel", shouldUpgrade: upgradeToMessagesChannel, onUpgrade: messagesChannel)
     }
 }
@@ -111,16 +112,17 @@ extension MessageController {
                 return
             }
             
-            let message = Message(contactID: contactID, senderID: senderID, text: incoming.text)
             do {
+                let message = Message(contactID: contactID, senderID: senderID, text: incoming.text)
                 try await messageRepository.create(message)
+                guard let messageCreatedAt = message.createdAt else { throw MessageError.databaseError }
                 
                 let messageResponse = MessageResponse(
                     id: try message.requireID(),
                     text: message.text,
                     senderID: senderID,
                     isRead: message.isRead,
-                    createdAt: message.createdAt
+                    createdAt: messageCreatedAt
                 )
                 
                 let encoder = JSONEncoder()
@@ -162,7 +164,9 @@ extension MessageController {
 
 private extension Message {
     func toResponse() throws -> MessageResponse {
-        try MessageResponse(
+        guard let createdAt else { throw MessageError.databaseError }
+        
+        return try MessageResponse(
             id: requireID(),
             text: text,
             senderID: $sender.id,
