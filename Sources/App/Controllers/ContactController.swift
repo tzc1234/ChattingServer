@@ -74,7 +74,7 @@ struct ContactController {
     
     @Sendable
     private func block(req: Request) async throws -> ContactResponse {
-        let contactID = try extractContactID(from: req.parameters)
+        let contactID = try validateContactIDFormat(from: req.parameters)
         let currentUserID = try req.auth.require(Payload.self).userID
         
         guard let contact = try await contactRepository.findBy(id: contactID, userID: currentUserID) else {
@@ -92,7 +92,7 @@ struct ContactController {
     }
     
     @Sendable func unblock(req: Request) async throws -> ContactResponse {
-        let contactID = try extractContactID(from: req.parameters)
+        let contactID = try validateContactIDFormat(from: req.parameters)
         let currentUserID = try req.auth.require(Payload.self).userID
         
         guard let contact = try await contactRepository.findBy(id: contactID, userID: currentUserID) else {
@@ -113,7 +113,7 @@ struct ContactController {
         return try await contactResponse(with: contact, currentUserID: currentUserID)
     }
     
-    private func extractContactID(from parameters: Parameters) throws -> Int {
+    private func validateContactIDFormat(from parameters: Parameters) throws -> Int {
         guard let contactIDString = parameters.get("contact_id"), let contactID = Int(contactIDString) else {
             throw ContactError.contactIDInvalid
         }
