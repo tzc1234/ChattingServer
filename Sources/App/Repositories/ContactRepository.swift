@@ -65,12 +65,12 @@ actor ContactRepository {
             .count() > 0
     }
     
-    func getUser1For(_ contact: Contact) async throws -> User {
-        try await contact.$user1.get(on: database)
-    }
-    
-    func getUser2For(_ contact: Contact) async throws -> User {
-        try await contact.$user2.get(on: database)
+    func getResponderFor(_ contact: Contact, by currentUserID: Int) async throws -> User {
+        if contact.$user1.id == currentUserID {
+            return try await contact.$user2.get(on: database)
+        }
+        
+        return try await contact.$user1.get(on: database)
     }
     
     func lastUpdateFor(_ contact: Contact) async throws -> Date? {

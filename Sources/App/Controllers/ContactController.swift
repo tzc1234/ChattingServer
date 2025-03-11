@@ -153,32 +153,6 @@ extension ContactController: RouteCollection {
     }
 }
 
-private extension Contact {
-    func toResponse(currentUserID: Int,
-                    contactRepository: ContactRepository,
-                    avatarLink: (String?) async -> String?) async throws -> ContactResponse {
-        guard let createdAt else { throw ContactError.databaseError }
-        
-        return try await ContactResponse(
-            id: requireID(),
-            responder: responder(by: currentUserID, on: contactRepository).toResponse(avatarLink: avatarLink),
-            blockedByUserID: $blockedBy.id,
-            unreadMessageCount: contactRepository.unreadMessagesCountFor(self, senderIsNot: currentUserID),
-            createdAt: createdAt,
-            lastUpdate: contactRepository.lastUpdateFor(self),
-            lastMessageText: contactRepository.lastMessageTextFor(self, senderIsNot: currentUserID)
-        )
-    }
-    
-    private func responder(by currentUserID: Int, on contactRepository: ContactRepository) async throws -> User {
-        if $user1.id != currentUserID {
-            try await contactRepository.getUser1For(self)
-        } else {
-            try await contactRepository.getUser2For(self)
-        }
-    }
-}
-
 private extension [Contact] {
     func toResponse(currentUserID: Int,
                     contactRepository: ContactRepository,
@@ -192,5 +166,23 @@ private extension [Contact] {
             ))
         }
         return ContactsResponse(contacts: contactResponses)
+    }
+}
+
+private extension Contact {
+    func toResponse(currentUserID: Int,
+                    contactRepository: ContactRepository,
+                    avatarLink: (String?) async -> String?) async throws -> ContactResponse {
+        guard let createdAt else { throw ContactError.databaseError }
+        
+        return try await ContactResponse(
+            id: requireID(),
+            responder: contactRepository.getResponderFor(self, by: currentUserID).toResponse(avatarLink: avatarLink),
+            blockedByUserID: $blockedBy.id,
+            unreadMessageCount: contactRepository.unreadMessagesCountFor(self, senderIsNot: currentUserID),
+            createdAt: createdAt,
+            lastUpdate: contactRepository.lastUpdateFor(self),
+            lastMessageText: contactRepository.lastMessageTextFor(self, senderIsNot: currentUserID)
+        )
     }
 }
