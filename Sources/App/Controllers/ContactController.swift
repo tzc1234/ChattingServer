@@ -58,7 +58,7 @@ struct ContactController {
             throw ContactError.responderSameAsCurrentUser
         }
         
-        return try await contactRepository.create(by: currentUserID, and: responderID)
+        return try await contactRepository.createBy(userID: currentUserID, anotherUserID: responderID)
     }
     
     @Sendable

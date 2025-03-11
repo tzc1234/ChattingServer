@@ -42,11 +42,11 @@ actor ContactRepository {
         try row.decode(fluentModel: Contact.self)
     }
     
-    func create(by currentUserID: Int, and responderID: Int) async throws -> Contact {
-        let contact = if currentUserID < responderID {
-            Contact(userID1: currentUserID, userID2: responderID)
+    func createBy(userID: Int, anotherUserID: Int) async throws -> Contact {
+        let contact = if userID < anotherUserID {
+            Contact(userID1: userID, userID2: anotherUserID)
         } else {
-            Contact(userID1: responderID, userID2: currentUserID)
+            Contact(userID1: anotherUserID, userID2: userID)
         }
         try await contact.create(on: database)
         return contact
@@ -71,8 +71,8 @@ actor ContactRepository {
             .count() > 0
     }
     
-    func responderFor(_ contact: Contact, by currentUserID: Int) async throws -> User {
-        if contact.$user1.id == currentUserID {
+    func responderFor(_ contact: Contact, by userID: Int) async throws -> User {
+        if contact.$user1.id == userID {
             return try await contact.$user2.get(on: database)
         }
         
