@@ -177,7 +177,7 @@ private extension Contact {
         
         return try await ContactResponse(
             id: requireID(),
-            responder: contactRepository.getResponderFor(self, by: currentUserID).toResponse(avatarLink: avatarLink),
+            responder: contactRepository.responderFor(self, by: currentUserID).toResponse(avatarLink: avatarLink),
             blockedByUserID: $blockedBy.id,
             unreadMessageCount: contactRepository.unreadMessagesCountFor(self, senderIsNot: currentUserID),
             createdAt: createdAt,

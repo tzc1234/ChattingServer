@@ -65,7 +65,7 @@ actor ContactRepository {
             .count() > 0
     }
     
-    func getResponderFor(_ contact: Contact, by currentUserID: Int) async throws -> User {
+    func responderFor(_ contact: Contact, by currentUserID: Int) async throws -> User {
         if contact.$user1.id == currentUserID {
             return try await contact.$user2.get(on: database)
         }
@@ -112,7 +112,7 @@ private extension SQLSelectBuilder {
     }
 }
 
-extension QueryBuilder<Contact> {
+private extension QueryBuilder<Contact> {
     func filter(by userID: Int) -> Self {
         group(.or, { group in
             group.filter(\.$user1.$id == userID).filter(\.$user2.$id == userID)
