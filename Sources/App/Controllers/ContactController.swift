@@ -50,8 +50,7 @@ struct ContactController {
     }
     
     private func contact(for currentUserID: Int, with responderEmail: String) async throws -> Contact {
-        guard let responder = try await userRepository.findBy(email: responderEmail),
-                let responderID = try? responder.requireID() else {
+        guard let responderID = try await userRepository.findBy(email: responderEmail)?.requireID() else {
             throw ContactError.responderNotFound
         }
         
