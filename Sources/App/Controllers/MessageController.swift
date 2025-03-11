@@ -20,7 +20,7 @@ actor MessageController {
     
     @Sendable
     private func index(req: Request) async throws -> MessagesResponse {
-        let contactID = try validateContactIDFormat(req: req)
+        let contactID = try ValidatedContactID(req.parameters).value
         let userID = try req.auth.require(Payload.self).userID
         let indexRequest = try req.query.decode(MessagesIndexRequest.self)
         
@@ -40,7 +40,7 @@ actor MessageController {
     @Sendable
     private func readMessages(req: Request) async throws -> Response {
         let userID = try req.auth.require(Payload.self).userID
-        let contactID = try validateContactIDFormat(req: req)
+        let contactID = try ValidatedContactID(req.parameters).value
         let untilMessageID = try req.content.decode(ReadMessageRequest.self).untilMessageID
         
         guard try await contactRepository.isContactExited(id: contactID, withUserID: userID) else {
@@ -54,14 +54,6 @@ actor MessageController {
         )
         
         return Response()
-    }
-    
-    private func validateContactIDFormat(req: Request) throws -> ContactID {
-        guard let contactIDString = req.parameters.get("contact_id"), let contactID = Int(contactIDString) else {
-            throw MessageError.contactIDInvalid
-        }
-        
-        return contactID
     }
 }
 
@@ -83,7 +75,7 @@ extension MessageController {
     @Sendable
     private func upgradeToMessagesChannel(req: Request) async throws -> HTTPHeaders? {
         senderID = try req.auth.require(Payload.self).userID
-        contactID = try validateContactIDFormat(req: req)
+        contactID = try ValidatedContactID(req.parameters).value
         return [:]
     }
     
