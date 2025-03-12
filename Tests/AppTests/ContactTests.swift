@@ -231,7 +231,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 app: app
             )
             .filter { [smallerThanBeforeDateContact1.id, smallerThanBeforeDateContact2.id].contains($0.id) }
-            .sorted(by: { $0.lastUpdate ?? $0.createdAt > $1.lastUpdate ?? $1.createdAt })
+            .sorted(by: { $0.lastUpdate > $1.lastUpdate })
             
             // test beforeDate
             try await app.test(.GET, .apiPath("contacts")) { req in
@@ -483,25 +483,9 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         #expect(contact.blockedByUserID == expected.blockedByUserID, sourceLocation: sourceLocation)
         #expect(contact.unreadMessageCount == expected.unreadMessageCount, sourceLocation: sourceLocation)
         #expect(
-            Int(contact.createdAt.timeIntervalSince1970) == Int(expected.createdAt.timeIntervalSince1970),
+            contact.lastUpdate.removeTimeIntervalDecimal() == expected.lastUpdate.removeTimeIntervalDecimal(),
             sourceLocation: sourceLocation
         )
-        
-        if let expectedLastUpdate = expected.lastUpdate {
-            guard let lastUpdate = contact.lastUpdate else {
-                Issue.record(
-                    "Expect lastUpdate: \(expectedLastUpdate), got nil instead",
-                    sourceLocation: sourceLocation
-                )
-                return
-            }
-            
-            #expect(
-                Int(lastUpdate.timeIntervalSince1970) == Int(expectedLastUpdate.timeIntervalSince1970),
-                sourceLocation: sourceLocation
-            )
-        }
-        
         #expect(contact.lastMessageText == expected.lastMessageText, sourceLocation: sourceLocation)
     }
     
@@ -563,8 +547,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             responder: anotherUser.toResponse(app: app, directoryPath: testAvatarDirectoryPath),
             blockedByUserID: nil,
             unreadMessageCount: await repository.unreadMessagesCountFor(contact, senderIsNot: user.id!),
-            createdAt: contact.createdAt!,
-            lastUpdate: await repository.lastUpdateFor(contact),
+            lastUpdate: await repository.lastUpdateFor(contact)!,
             lastMessageText: await repository.lastMessageTextFor(contact, senderIsNot: user.id!)
         )
     }
