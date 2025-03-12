@@ -160,7 +160,7 @@ private extension Contact {
             blockedByUserID: $blockedBy.id,
             unreadMessageCount: contactRepository.unreadMessagesCountFor(self, senderIsNot: currentUserID),
             lastUpdate: lastUpdate,
-            lastMessageText: contactRepository.lastMessageTextFor(self, senderIsNot: currentUserID)
+            lastMessage: contactRepository.lastMessageFor(self, senderIsNot: currentUserID)?.toResponse()
         )
     }
 }

@@ -91,23 +91,21 @@ actor ContactRepository {
             .count()
     }
     
-    func lastMessageTextFor(_ contact: Contact, senderIsNot userID: Int) async throws -> String? {
-        if let text = try await firstUnreadMessageTextFor(contact, senderIsNot: userID) {
-            return text
+    func lastMessageFor(_ contact: Contact, senderIsNot userID: Int) async throws -> Message? {
+        if let message = try await firstUnreadMessage(contact, senderIsNot: userID) {
+            return message
         }
         
         return try await contact.$messages.query(on: database)
             .sort(\.$createdAt, .descending)
-            .first()?
-            .text
+            .first()
     }
     
-    private func firstUnreadMessageTextFor(_ contact: Contact, senderIsNot userID: Int) async throws -> String? {
+    private func firstUnreadMessage(_ contact: Contact, senderIsNot userID: Int) async throws -> Message? {
         try await contact.$messages.query(on: database)
             .filter(\.$isRead == false)
             .filter(\.$sender.$id != userID)
-            .first()?
-            .text
+            .first()
     }
 }
 

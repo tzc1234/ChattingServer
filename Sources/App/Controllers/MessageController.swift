@@ -154,20 +154,6 @@ extension MessageController {
     }
 }
 
-private extension Message {
-    func toResponse() throws -> MessageResponse {
-        guard let createdAt else { throw MessageError.databaseError }
-        
-        return try MessageResponse(
-            id: requireID(),
-            text: text,
-            senderID: $sender.id,
-            isRead: isRead,
-            createdAt: createdAt
-        )
-    }
-}
-
 private extension MessageRepository.MessageID {
     init?(indexRequest: MessagesIndexRequest) {
         if let beforeID = indexRequest.beforeMessageID {
