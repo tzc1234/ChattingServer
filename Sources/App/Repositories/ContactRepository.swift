@@ -92,8 +92,8 @@ actor ContactRepository {
     }
     
     func lastMessageFor(_ contact: Contact, senderIsNot userID: Int) async throws -> Message? {
-        if let message = try await firstUnreadMessage(contact, senderIsNot: userID) {
-            return message
+        if let firstUnreadMessage = try await firstUnreadMessage(contact, senderIsNot: userID) {
+            return firstUnreadMessage
         }
         
         return try await contact.$messages.query(on: database)

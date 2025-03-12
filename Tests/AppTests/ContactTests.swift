@@ -6,7 +6,7 @@ import Vapor
 
 @Suite("Contact routes tests")
 struct ContactTests: AppTests, AvatarFileHelpers {
-    @Test("new contact failure without token")
+    @Test("new contact failure without a token")
     func newContactFailureWithoutToken() async throws {
         try await makeApp { app in
             try await app.test(.POST, .apiPath("contacts")) { res async throws in
@@ -15,7 +15,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
-    @Test("new contact failure with invalid token")
+    @Test("new contact failure with an invalid token")
     func newContactFailureWithInvalidToken() async throws {
         let invalidToken = "invalid-token"
         
@@ -28,7 +28,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
-    @Test("new contact failure with non-exist responder email")
+    @Test("new contact failure with a non-exist responder email")
     func newContactFailureWithNonExistResponderEmail() async throws {
         try await makeApp { app in
             let nonExistResponderEmail = "non-exist@email.com"
@@ -69,7 +69,9 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             let (responder, _) = try await createUserAndAccessToken(app, email: "responder@email.com")
             let contactRequest = ContactRequest(responderEmail: responder.email)
             
-            try #require(currentUser.id! < responder.id!)
+            let currentUserID = try #require(currentUser.id)
+            let responderID = try #require(responder.id)
+            try #require(currentUserID < responderID)
             
             try await app.test(.POST, .apiPath("contacts")) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken)
@@ -93,7 +95,9 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             let (currentUser, currentUserToken) = try await createUserAndAccessToken(app)
             let contactRequest = ContactRequest(responderEmail: responder.email)
             
-            try #require(currentUser.id! > responder.id!)
+            let currentUserID = try #require(currentUser.id)
+            let responderID = try #require(responder.id)
+            try #require(currentUserID > responderID)
             
             try await app.test(.POST, .apiPath("contacts")) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken)
@@ -282,7 +286,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
-    @Test("block contact failure with an non-exist contactID")
+    @Test("block contact failure with a non-exist contactID")
     func blockContactFailureWithNonExistContactID() async throws {
         try await makeApp { app in
             let tokenResponse = try await createTokenResponse(app)
@@ -363,7 +367,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
-    @Test("unblock contact failure with an non-exist contactID")
+    @Test("unblock contact failure with a non-exist contactID")
     func unblockContactFailureWithNonExistContactID() async throws {
         try await makeApp { app in
             let tokenResponse = try await createTokenResponse(app)
@@ -452,13 +456,11 @@ struct ContactTests: AppTests, AvatarFileHelpers {
     // MARK: - Helpers
     
     private func makeApp(avatarFilename: String = "filename.png",
-                         _ test: (Application) async throws -> (),
-                         afterShutdown: () throws -> Void = {}) async throws {
+                         _ test: (Application) async throws -> ()) async throws {
         try await withApp(
             avatarDirectoryPath: testAvatarDirectoryPath,
             avatarFilename: { _ in avatarFilename },
-            test,
-            afterShutdown: afterShutdown
+            test
         )
     }
     
@@ -568,9 +570,9 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             id: contact.requireID(),
             responder: anotherUser.toResponse(app: app, directoryPath: testAvatarDirectoryPath),
             blockedByUserID: nil,
-            unreadMessageCount: repository.unreadMessagesCountFor(contact, senderIsNot: user.id!),
+            unreadMessageCount: repository.unreadMessagesCountFor(contact, senderIsNot: user.requireID()),
             lastUpdate: repository.lastUpdateFor(contact)!,
-            lastMessage: repository.lastMessageFor(contact, senderIsNot: user.id!)?.toResponse()
+            lastMessage: repository.lastMessageFor(contact, senderIsNot: user.requireID())?.toResponse()
         )
     }
     

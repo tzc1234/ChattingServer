@@ -105,7 +105,7 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
         }
     }
     
-    @Test("login failure with an non-exist user")
+    @Test("login failure with a non-exist user")
     func loginANonExistUser() async throws {
         let loginRequest = LoginRequest(email: "non-exist@email.com", password: "non-exist")
         
