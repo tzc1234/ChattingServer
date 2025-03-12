@@ -306,7 +306,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 user: currentUser,
                 anotherUser: anotherUser,
                 blockedByUserID: anotherUser.requireID(),
-                app: app
+                db: app.db
             )
             
             try await app.test(.PATCH, .apiPath("contacts", "\(alreadyBlockedContact.requireID())", "block")) { req in
@@ -324,7 +324,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         try await makeApp { app in
             let (currentUser, accessToken) = try await createUserAndAccessToken(app)
             let anotherUser = try await createUser(app, email: "another@email.com")
-            let contact = try await createContact(user: currentUser, anotherUser: anotherUser, app: app)
+            let contact = try await createContact(user: currentUser, anotherUser: anotherUser, db: app.db)
             
             try await app.test(.PATCH, .apiPath("contacts", "\(contact.requireID())", "block")) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
@@ -383,7 +383,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         try await makeApp { app in
             let (currentUser, accessToken) = try await createUserAndAccessToken(app)
             let anotherUser = try await createUser(app, email: "another@email.com")
-            let unBlockedContact = try await createContact(user: currentUser, anotherUser: anotherUser, app: app)
+            let unBlockedContact = try await createContact(user: currentUser, anotherUser: anotherUser, db: app.db)
             
             try await app.test(.PATCH, .apiPath("contacts", "\(unBlockedContact.requireID())", "unblock")) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
@@ -404,7 +404,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 user: currentUser,
                 anotherUser: anotherUser,
                 blockedByUserID: anotherUser.requireID(),
-                app: app
+                db: app.db
             )
             
             try await app.test(
@@ -429,7 +429,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 user: currentUser,
                 anotherUser: anotherUser,
                 blockedByUserID: currentUser.requireID(),
-                app: app
+                db: app.db
             )
             
             try await app.test(
@@ -561,16 +561,16 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             user: user,
             anotherUser: anotherUser,
             messageDetails: messageDetails,
-            app: app
+            db: app.db
         )
         
         return try await ContactResponse(
             id: contact.requireID(),
             responder: anotherUser.toResponse(app: app, directoryPath: testAvatarDirectoryPath),
             blockedByUserID: nil,
-            unreadMessageCount: await repository.unreadMessagesCountFor(contact, senderIsNot: user.id!),
-            lastUpdate: await repository.lastUpdateFor(contact)!,
-            lastMessage: await repository.lastMessageFor(contact, senderIsNot: user.id!)?.toResponse()
+            unreadMessageCount: repository.unreadMessagesCountFor(contact, senderIsNot: user.id!),
+            lastUpdate: repository.lastUpdateFor(contact)!,
+            lastMessage: repository.lastMessageFor(contact, senderIsNot: user.id!)?.toResponse()
         )
     }
     
@@ -579,26 +579,26 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                                anotherUser: User,
                                blockedByUserID: Int? = nil,
                                messageDetails: [ContactDetailForTest.Message] = [],
-                               app: Application) async throws -> Contact {
+                               db: Database) async throws -> Contact {
         let contact = try Contact(
             id: id,
             userID1: user.requireID(),
             userID2: anotherUser.requireID(),
             blockedByUserID: blockedByUserID
         )
-        try await contact.create(on: app.db)
+        try await contact.create(on: db)
         
         let pendingMessages = try messageDetails.map {
             Message(contactID: try contact.requireID(), senderID: $0.senderID, text: $0.text)
         }
-        try await contact.$messages.create(pendingMessages, on: app.db)
+        try await contact.$messages.create(pendingMessages, on: db)
         
         // Update createdAt depends on messageDetail.lastUpdate
-        let messages = try await contact.$messages.get(on: app.db)
+        let messages = try await contact.$messages.get(on: db)
         for i in 0..<messages.count {
             let message = messages[i]
             message.createdAt = messageDetails[i].lastUpdate
-            try await message.update(on: app.db)
+            try await message.update(on: db)
         }
         
         return contact
