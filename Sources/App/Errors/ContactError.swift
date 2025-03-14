@@ -12,19 +12,10 @@ enum ContactError: AbortError, DebuggableError {
     
     var status: HTTPResponseStatus {
         switch self {
-        case .responderNotFound:
+        case .responderNotFound, .contactIDInvalid, .contactNotFound:
             .notFound
-        case .responderSameAsCurrentUser:
-            .conflict
-        case .contactIDInvalid:
-            .badRequest
-        case .contactNotFound:
-            .notFound
-        case .contactAlreadyBlocked:
-            .badRequest
-        case .contactIsNotBlocked:
-            .badRequest
-        case .contactIsNotBlockedByCurrentUser:
+        case .responderSameAsCurrentUser, .contactAlreadyBlocked, .contactIsNotBlocked,
+                .contactIsNotBlockedByCurrentUser:
             .badRequest
         case .databaseError:
             .internalServerError

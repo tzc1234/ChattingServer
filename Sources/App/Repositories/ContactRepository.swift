@@ -42,11 +42,18 @@ actor ContactRepository {
         try row.decode(fluentModel: Contact.self)
     }
     
-    func create(_ contact: Contact) async throws {
+    func createBy(userID: Int, anotherUserID: Int) async throws -> Contact {
+        let contact = if userID < anotherUserID {
+            Contact(userID1: userID, userID2: anotherUserID)
+        } else {
+            Contact(userID1: anotherUserID, userID2: userID)
+        }
         try await contact.create(on: database)
+        return contact
     }
     
-    func update(_ contact: Contact) async throws {
+    func update(_ contact: Contact, blockedByUserID: Int?) async throws {
+        contact.$blockedBy.id = blockedByUserID
         try await contact.update(on: database)
     }
     
@@ -65,12 +72,12 @@ actor ContactRepository {
             .count() > 0
     }
     
-    func getUser1For(_ contact: Contact) async throws -> User {
-        try await contact.$user1.get(on: database)
-    }
-    
-    func getUser2For(_ contact: Contact) async throws -> User {
-        try await contact.$user2.get(on: database)
+    func responderFor(_ contact: Contact, by userID: Int) async throws -> User {
+        if contact.$user1.id == userID {
+            return try await contact.$user2.get(on: database)
+        }
+        
+        return try await contact.$user1.get(on: database)
     }
     
     func lastUpdateFor(_ contact: Contact) async throws -> Date? {
@@ -84,23 +91,21 @@ actor ContactRepository {
             .count()
     }
     
-    func lastMessageTextFor(_ contact: Contact, senderIsNot userID: Int) async throws -> String? {
-        if let text = try await firstUnreadMessageTextFor(contact, senderIsNot: userID) {
-            return text
+    func lastMessageFor(_ contact: Contact, senderIsNot userID: Int) async throws -> Message? {
+        if let firstUnreadMessage = try await firstUnreadMessage(contact, senderIsNot: userID) {
+            return firstUnreadMessage
         }
         
         return try await contact.$messages.query(on: database)
             .sort(\.$createdAt, .descending)
-            .first()?
-            .text
+            .first()
     }
     
-    private func firstUnreadMessageTextFor(_ contact: Contact, senderIsNot userID: Int) async throws -> String? {
+    private func firstUnreadMessage(_ contact: Contact, senderIsNot userID: Int) async throws -> Message? {
         try await contact.$messages.query(on: database)
             .filter(\.$isRead == false)
             .filter(\.$sender.$id != userID)
-            .first()?
-            .text
+            .first()
     }
 }
 
@@ -112,7 +117,7 @@ private extension SQLSelectBuilder {
     }
 }
 
-extension QueryBuilder<Contact> {
+private extension QueryBuilder<Contact> {
     func filter(by userID: Int) -> Self {
         group(.or, { group in
             group.filter(\.$user1.$id == userID).filter(\.$user2.$id == userID)

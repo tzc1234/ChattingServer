@@ -6,7 +6,7 @@ import Vapor
 
 @Suite("Contact routes tests")
 struct ContactTests: AppTests, AvatarFileHelpers {
-    @Test("new contact failure without token")
+    @Test("new contact failure without a token")
     func newContactFailureWithoutToken() async throws {
         try await makeApp { app in
             try await app.test(.POST, .apiPath("contacts")) { res async throws in
@@ -15,7 +15,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
-    @Test("new contact failure with invalid token")
+    @Test("new contact failure with an invalid token")
     func newContactFailureWithInvalidToken() async throws {
         let invalidToken = "invalid-token"
         
@@ -28,7 +28,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
-    @Test("new contact failure with non-exist responder email")
+    @Test("new contact failure with a non-exist responder email")
     func newContactFailureWithNonExistResponderEmail() async throws {
         try await makeApp { app in
             let nonExistResponderEmail = "non-exist@email.com"
@@ -55,7 +55,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 req.headers.bearerAuthorization = BearerAuthorization(token: token.accessToken)
                 try req.content.encode(contactRequest)
             } afterResponse: { res async throws in
-                #expect(res.status == .conflict)
+                #expect(res.status == .badRequest)
                 let error = try res.content.decode(ErrorResponse.self)
                 #expect(error.reason == "Responder cannot be the same as current user")
             }
@@ -69,7 +69,9 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             let (responder, _) = try await createUserAndAccessToken(app, email: "responder@email.com")
             let contactRequest = ContactRequest(responderEmail: responder.email)
             
-            try #require(currentUser.id! < responder.id!)
+            let currentUserID = try #require(currentUser.id)
+            let responderID = try #require(responder.id)
+            try #require(currentUserID < responderID)
             
             try await app.test(.POST, .apiPath("contacts")) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken)
@@ -78,8 +80,9 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 #expect(res.status == .ok)
                 
                 let contact = try res.content.decode(ContactResponse.self)
-                expect(contact: contact, as: try await responder
-                    .toResponse(app: app, directoryPath: testAvatarDirectoryPath)
+                expect(
+                    contact: contact,
+                    as: try await responder.toResponse(app: app, directoryPath: testAvatarDirectoryPath)
                 )
             }
         }
@@ -92,7 +95,9 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             let (currentUser, currentUserToken) = try await createUserAndAccessToken(app)
             let contactRequest = ContactRequest(responderEmail: responder.email)
             
-            try #require(currentUser.id! > responder.id!)
+            let currentUserID = try #require(currentUser.id)
+            let responderID = try #require(responder.id)
+            try #require(currentUserID > responderID)
             
             try await app.test(.POST, .apiPath("contacts")) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: currentUserToken)
@@ -101,8 +106,9 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 #expect(res.status == .ok)
                 
                 let contact = try res.content.decode(ContactResponse.self)
-                expect(contact: contact, as: try await responder
-                    .toResponse(app: app, directoryPath: testAvatarDirectoryPath)
+                expect(
+                    contact: contact,
+                    as: try await responder.toResponse(app: app, directoryPath: testAvatarDirectoryPath)
                 )
             }
         }
@@ -179,7 +185,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             let anotherUser4 = try await createUser(app, email: "another-user4@email.com")
             
             let beforeDate = Date.now
-            let smallerThanBeforeDateContact1 = makeContactDetail(
+            let smallerThanBeforeDateContact1 = makeContactDetailForTest(
                 id: 100,
                 user: currentUser,
                 anotherUser: anotherUser1,
@@ -187,7 +193,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 text: "text 100",
                 lastUpdate: beforeDate.reducing(seconds: 1)
             )
-            let equalToBeforeDateContact = makeContactDetail(
+            let equalToBeforeDateContact = makeContactDetailForTest(
                 id: 200,
                 user: currentUser,
                 anotherUser: anotherUser2,
@@ -195,7 +201,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 text: "text 200",
                 lastUpdate: beforeDate
             )
-            let greaterThanBeforeDateContact = makeContactDetail(
+            let greaterThanBeforeDateContact = makeContactDetailForTest(
                 id: 300,
                 user: currentUser,
                 anotherUser: anotherUser3,
@@ -203,7 +209,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 text: "text 300",
                 lastUpdate: beforeDate.adding(seconds: 1)
             )
-            let smallerThanBeforeDateContact2 = makeContactDetail(
+            let smallerThanBeforeDateContact2 = makeContactDetailForTest(
                 id: 400,
                 user: currentUser,
                 anotherUser: anotherUser4,
@@ -211,7 +217,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 text: "text 400",
                 lastUpdate: beforeDate.reducing(seconds: 1)
             )
-            let nonCurrentUserContact = makeContactDetail(
+            let nonCurrentUserContact = makeContactDetailForTest(
                 id: 500,
                 user: anotherUser1,
                 anotherUser: anotherUser2,
@@ -280,7 +286,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
-    @Test("block contact failure with an non-exist contactID")
+    @Test("block contact failure with a non-exist contactID")
     func blockContactFailureWithNonExistContactID() async throws {
         try await makeApp { app in
             let tokenResponse = try await createTokenResponse(app)
@@ -304,7 +310,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 user: currentUser,
                 anotherUser: anotherUser,
                 blockedByUserID: anotherUser.requireID(),
-                app: app
+                db: app.db
             )
             
             try await app.test(.PATCH, .apiPath("contacts", "\(alreadyBlockedContact.requireID())", "block")) { req in
@@ -322,7 +328,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         try await makeApp { app in
             let (currentUser, accessToken) = try await createUserAndAccessToken(app)
             let anotherUser = try await createUser(app, email: "another@email.com")
-            let contact = try await createContact(user: currentUser, anotherUser: anotherUser, app: app)
+            let contact = try await createContact(user: currentUser, anotherUser: anotherUser, db: app.db)
             
             try await app.test(.PATCH, .apiPath("contacts", "\(contact.requireID())", "block")) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
@@ -361,7 +367,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         }
     }
     
-    @Test("unblock contact failure with an non-exist contactID")
+    @Test("unblock contact failure with a non-exist contactID")
     func unblockContactFailureWithNonExistContactID() async throws {
         try await makeApp { app in
             let tokenResponse = try await createTokenResponse(app)
@@ -381,7 +387,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         try await makeApp { app in
             let (currentUser, accessToken) = try await createUserAndAccessToken(app)
             let anotherUser = try await createUser(app, email: "another@email.com")
-            let unBlockedContact = try await createContact(user: currentUser, anotherUser: anotherUser, app: app)
+            let unBlockedContact = try await createContact(user: currentUser, anotherUser: anotherUser, db: app.db)
             
             try await app.test(.PATCH, .apiPath("contacts", "\(unBlockedContact.requireID())", "unblock")) { req in
                 req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
@@ -402,7 +408,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 user: currentUser,
                 anotherUser: anotherUser,
                 blockedByUserID: anotherUser.requireID(),
-                app: app
+                db: app.db
             )
             
             try await app.test(
@@ -427,7 +433,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 user: currentUser,
                 anotherUser: anotherUser,
                 blockedByUserID: currentUser.requireID(),
-                app: app
+                db: app.db
             )
             
             try await app.test(
@@ -450,13 +456,11 @@ struct ContactTests: AppTests, AvatarFileHelpers {
     // MARK: - Helpers
     
     private func makeApp(avatarFilename: String = "filename.png",
-                         _ test: (Application) async throws -> (),
-                         afterShutdown: () throws -> Void = {}) async throws {
+                         _ test: (Application) async throws -> ()) async throws {
         try await withApp(
             avatarDirectoryPath: testAvatarDirectoryPath,
             avatarFilename: { _ in avatarFilename },
-            test,
-            afterShutdown: afterShutdown
+            test
         )
     }
     
@@ -483,16 +487,37 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         #expect(contact.blockedByUserID == expected.blockedByUserID, sourceLocation: sourceLocation)
         #expect(contact.unreadMessageCount == expected.unreadMessageCount, sourceLocation: sourceLocation)
         #expect(
-            Int(contact.lastUpdate.timeIntervalSince1970) == Int(expected.lastUpdate.timeIntervalSince1970),
+            contact.lastUpdate == expected.lastUpdate.removeTimeIntervalDecimal(),
             sourceLocation: sourceLocation
         )
-        #expect(contact.lastMessageText == expected.lastMessageText, sourceLocation: sourceLocation)
+        assert(contact.lastMessage, asExpected: expected.lastMessage, sourceLocation: sourceLocation)
+    }
+    
+    private func assert(_ message: MessageResponse?,
+                        asExpected expected: MessageResponse?,
+                        sourceLocation: SourceLocation = #_sourceLocation) {
+        if message == nil && expected == nil { return }
+        guard let message, let expected else {
+            Issue.record(
+                "Expected message: \(String(describing: expected)), got \(String(describing: message)) instead",
+                sourceLocation: sourceLocation
+            )
+            return
+        }
+        
+        #expect(message.id == expected.id, sourceLocation: sourceLocation)
+        #expect(message.text == expected.text, sourceLocation: sourceLocation)
+        #expect(message.senderID == expected.senderID, sourceLocation: sourceLocation)
+        #expect(message.isRead == expected.isRead, sourceLocation: sourceLocation)
+        #expect(
+            message.createdAt == expected.createdAt.removeTimeIntervalDecimal(),
+            sourceLocation: sourceLocation
+        )
     }
     
     private func expect(contact: ContactResponse,
                         as responder: UserResponse,
                         blockedByUserID: Int? = nil,
-                        lastMessageText: String? = nil,
                         sourceLocation: SourceLocation = #_sourceLocation) {
         #expect(contact.responder.email == responder.email, sourceLocation: sourceLocation)
         #expect(contact.responder.name == responder.name, sourceLocation: sourceLocation)
@@ -500,15 +525,14 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         #expect(contact.responder.avatarURL == responder.avatarURL, sourceLocation: sourceLocation)
         #expect(contact.blockedByUserID == blockedByUserID, sourceLocation: sourceLocation)
         #expect(contact.unreadMessageCount == 0, sourceLocation: sourceLocation)
-        #expect(contact.lastMessageText == lastMessageText, sourceLocation: sourceLocation)
     }
     
-    private func makeContactDetail(id: Int? = nil,
-                                   user: User,
-                                   anotherUser: User,
-                                   senderID: Int,
-                                   text: String,
-                                   lastUpdate: Date = .now) -> ContactDetailForTest {
+    private func makeContactDetailForTest(id: Int? = nil,
+                                          user: User,
+                                          anotherUser: User,
+                                          senderID: Int,
+                                          text: String,
+                                          lastUpdate: Date = .now) -> ContactDetailForTest {
         let messageDetail = ContactDetailForTest.Message(senderID: senderID, text: text, lastUpdate: lastUpdate)
         return ContactDetailForTest(id: id, user: user, anotherUser: anotherUser, messageDetails: [messageDetail])
     }
@@ -539,16 +563,16 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             user: user,
             anotherUser: anotherUser,
             messageDetails: messageDetails,
-            app: app
+            db: app.db
         )
         
         return try await ContactResponse(
             id: contact.requireID(),
             responder: anotherUser.toResponse(app: app, directoryPath: testAvatarDirectoryPath),
             blockedByUserID: nil,
-            unreadMessageCount: await repository.unreadMessagesCountFor(contact, senderIsNot: user.id!),
-            lastUpdate: await repository.lastUpdateFor(contact)!,
-            lastMessageText: await repository.lastMessageTextFor(contact, senderIsNot: user.id!)
+            unreadMessageCount: repository.unreadMessagesCountFor(contact, senderIsNot: user.requireID()),
+            lastUpdate: repository.lastUpdateFor(contact)!,
+            lastMessage: repository.lastMessageFor(contact, senderIsNot: user.requireID())?.toResponse()
         )
     }
     
@@ -557,26 +581,26 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                                anotherUser: User,
                                blockedByUserID: Int? = nil,
                                messageDetails: [ContactDetailForTest.Message] = [],
-                               app: Application) async throws -> Contact {
+                               db: Database) async throws -> Contact {
         let contact = try Contact(
             id: id,
             userID1: user.requireID(),
             userID2: anotherUser.requireID(),
             blockedByUserID: blockedByUserID
         )
-        try await contact.create(on: app.db)
+        try await contact.create(on: db)
         
         let pendingMessages = try messageDetails.map {
             Message(contactID: try contact.requireID(), senderID: $0.senderID, text: $0.text)
         }
-        try await contact.$messages.create(pendingMessages, on: app.db)
+        try await contact.$messages.create(pendingMessages, on: db)
         
         // Update createdAt depends on messageDetail.lastUpdate
-        let messages = try await contact.$messages.get(on: app.db)
+        let messages = try await contact.$messages.get(on: db)
         for i in 0..<messages.count {
             let message = messages[i]
             message.createdAt = messageDetails[i].lastUpdate
-            try await message.update(on: app.db)
+            try await message.update(on: db)
         }
         
         return contact

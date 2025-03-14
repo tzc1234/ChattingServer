@@ -32,3 +32,17 @@ final class Message: Model, @unchecked Sendable {
         self.isRead = isRead
     }
 }
+
+extension Message {
+    func toResponse() throws -> MessageResponse {
+        guard let createdAt else { throw MessageError.databaseError }
+        
+        return try MessageResponse(
+            id: requireID(),
+            text: text,
+            senderID: $sender.id,
+            isRead: isRead,
+            createdAt: createdAt
+        )
+    }
+}

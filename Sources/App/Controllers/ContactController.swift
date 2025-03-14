@@ -50,8 +50,7 @@ struct ContactController {
     }
     
     private func contact(for currentUserID: Int, with responderEmail: String) async throws -> Contact {
-        guard let responder = try await userRepository.findBy(email: responderEmail),
-                let responderID = try? responder.requireID() else {
+        guard let responderID = try await userRepository.findBy(email: responderEmail)?.requireID() else {
             throw ContactError.responderNotFound
         }
         
@@ -59,22 +58,12 @@ struct ContactController {
             throw ContactError.responderSameAsCurrentUser
         }
         
-        return try await createNewContact(with: currentUserID, and: responderID)
-    }
-    
-    private func createNewContact(with currentUserID: Int, and responderID: Int) async throws -> Contact {
-        let contact = if currentUserID < responderID {
-            Contact(userID1: currentUserID, userID2: responderID)
-        } else {
-            Contact(userID1: responderID, userID2: currentUserID)
-        }
-        try await contactRepository.create(contact)
-        return contact
+        return try await contactRepository.createBy(userID: currentUserID, anotherUserID: responderID)
     }
     
     @Sendable
     private func block(req: Request) async throws -> ContactResponse {
-        let contactID = try extractContactID(from: req.parameters)
+        let contactID = try ValidatedContactID(req.parameters).value
         let currentUserID = try req.auth.require(Payload.self).userID
         
         guard let contact = try await contactRepository.findBy(id: contactID, userID: currentUserID) else {
@@ -85,14 +74,13 @@ struct ContactController {
             throw ContactError.contactAlreadyBlocked
         }
         
-        contact.$blockedBy.id = currentUserID
-        try await contactRepository.update(contact)
+        try await contactRepository.update(contact, blockedByUserID: currentUserID)
         
         return try await contactResponse(with: contact, currentUserID: currentUserID)
     }
     
     @Sendable func unblock(req: Request) async throws -> ContactResponse {
-        let contactID = try extractContactID(from: req.parameters)
+        let contactID = try ValidatedContactID(req.parameters).value
         let currentUserID = try req.auth.require(Payload.self).userID
         
         guard let contact = try await contactRepository.findBy(id: contactID, userID: currentUserID) else {
@@ -107,18 +95,9 @@ struct ContactController {
             throw ContactError.contactIsNotBlockedByCurrentUser
         }
         
-        contact.$blockedBy.id = nil
-        try await contactRepository.update(contact)
+        try await contactRepository.update(contact, blockedByUserID: nil)
         
         return try await contactResponse(with: contact, currentUserID: currentUserID)
-    }
-    
-    private func extractContactID(from parameters: Parameters) throws -> Int {
-        guard let contactIDString = parameters.get("contact_id"), let contactID = Int(contactIDString) else {
-            throw ContactError.contactIDInvalid
-        }
-        
-        return contactID
     }
     
     private func contactResponse(with contact: Contact, currentUserID: Int) async throws -> ContactResponse {
@@ -153,33 +132,6 @@ extension ContactController: RouteCollection {
     }
 }
 
-private extension Contact {
-    func toResponse(currentUserID: Int,
-                    contactRepository: ContactRepository,
-                    avatarLink: (String?) async -> String?) async throws -> ContactResponse {
-        guard let lastUpdate = try await contactRepository.lastUpdateFor(self) else {
-            throw ContactError.databaseError
-        }
-        
-        return try await ContactResponse(
-            id: requireID(),
-            responder: responder(by: currentUserID, on: contactRepository).toResponse(avatarLink: avatarLink),
-            blockedByUserID: $blockedBy.id,
-            unreadMessageCount: contactRepository.unreadMessagesCountFor(self, senderIsNot: currentUserID),
-            lastUpdate: lastUpdate,
-            lastMessageText: contactRepository.lastMessageTextFor(self, senderIsNot: currentUserID)
-        )
-    }
-    
-    private func responder(by currentUserID: Int, on contactRepository: ContactRepository) async throws -> User {
-        if $user1.id != currentUserID {
-            try await contactRepository.getUser1For(self)
-        } else {
-            try await contactRepository.getUser2For(self)
-        }
-    }
-}
-
 private extension [Contact] {
     func toResponse(currentUserID: Int,
                     contactRepository: ContactRepository,
@@ -193,5 +145,22 @@ private extension [Contact] {
             ))
         }
         return ContactsResponse(contacts: contactResponses)
+    }
+}
+
+private extension Contact {
+    func toResponse(currentUserID: Int,
+                    contactRepository: ContactRepository,
+                    avatarLink: (String?) async -> String?) async throws -> ContactResponse {
+        guard let lastUpdate = try await contactRepository.lastUpdateFor(self) else { throw ContactError.databaseError }
+        
+        return try await ContactResponse(
+            id: requireID(),
+            responder: contactRepository.responderFor(self, by: currentUserID).toResponse(avatarLink: avatarLink),
+            blockedByUserID: $blockedBy.id,
+            unreadMessageCount: contactRepository.unreadMessagesCountFor(self, senderIsNot: currentUserID),
+            lastUpdate: lastUpdate,
+            lastMessage: contactRepository.lastMessageFor(self, senderIsNot: currentUserID)?.toResponse()
+        )
     }
 }
