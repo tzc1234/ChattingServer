@@ -13,3 +13,4 @@ db.sqlite
 *.drawio
 *.bkp
 Public/avatars
+resources
