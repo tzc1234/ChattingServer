@@ -11,7 +11,7 @@ import Vapor
 import VaporAPNS
 
 struct APNSConfiguration {
-    let p8KeyPath: String
+    let keyP8FilePath: String
     let keyID: String
     let teamID: String
     let bundleID: String
@@ -19,9 +19,10 @@ struct APNSConfiguration {
 }
 
 actor APNSHandler {
-    private struct Payload: Codable {
+    private struct NewContactAddedPayload: Codable {
         let action: String
-        let user_id: Int
+        let for_user_id: Int
+        let contact: ContactResponse
     }
     
     private let app: Application
@@ -31,40 +32,42 @@ actor APNSHandler {
         self.app = app
         self.configuration = configuration
         
-        Task {
-            let apnsConfig = await APNSClientConfiguration(
-                authenticationMethod: .jwt(
-                    privateKey: try .loadFrom(string: loadP8Key()),
-                    keyIdentifier: configuration.keyID,
-                    teamIdentifier: configuration.teamID
-                ),
-                environment: configuration.environment == "development" ? .development : .production
-            )
-            
-            app.apns.containers.use(
-                apnsConfig,
-                eventLoopGroupProvider: .shared(app.eventLoopGroup),
-                responseDecoder: JSONDecoder(),
-                requestEncoder: JSONEncoder(),
-                as: .default
-            )
-        }
+        let apnsConfig = APNSClientConfiguration(
+            authenticationMethod: .jwt(
+                privateKey: try .loadFrom(string: String(contentsOfFile: configuration.keyP8FilePath)),
+                keyIdentifier: configuration.keyID,
+                teamIdentifier: configuration.teamID
+            ),
+            environment: configuration.environment == "development" ? .development : .production
+        )
+        
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        app.apns.containers.use(
+            apnsConfig,
+            eventLoopGroupProvider: .shared(app.eventLoopGroup),
+            responseDecoder: decoder,
+            requestEncoder: encoder,
+            as: .default
+        )
     }
     
-    private func loadP8Key() throws -> String {
-        let keyPath = app.directory.workingDirectory + configuration.p8KeyPath
-        return try String(contentsOfFile: keyPath)
-    }
-    
-    func sendNewContactAddedBackgroundNotification(deviceToken: String, userID: Int) async {
-        let backgroundNotification = APNSBackgroundNotification(
+    func sendNewContactAddedNotification(deviceToken: String, forUserID: Int, contact: ContactResponse) async {
+        let alert = APNSAlertNotification(
+            alert: APNSAlertNotificationContent(
+                title: .raw("New contact received"),
+                body: .raw("\(contact.responder.name) added you as a new contact.")
+            ),
             expiration: .immediately,
+            priority: .immediately,
             topic: configuration.bundleID,
-            payload: Payload(action: "new_contact_added", user_id: userID)
+            payload: NewContactAddedPayload(action: "new_contact_added", for_user_id: forUserID, contact: contact)
         )
         
         do {
-            try await app.apns.client.sendBackgroundNotification(backgroundNotification, deviceToken: deviceToken)
+            try await app.apns.client.sendAlertNotification(alert, deviceToken: deviceToken)
         } catch {
             print("APNS error: \(error)")
         }
