@@ -7,12 +7,12 @@ import JWT
 func configure(_ app: Application) async throws {
     app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
 
-    let hostname = Environment.get("HOSTNAME") ?? ""
-    app.http.server.configuration.hostname = hostname.isEmpty ? "127.0.0.1" : hostname
-    
     if app.environment == .testing {
         app.databases.use(.sqlite(.memory), as: .sqlite)
     } else {
+        let hostname = Environment.get("HOSTNAME") ?? ""
+        app.http.server.configuration.hostname = hostname.isEmpty ? "127.0.0.1" : hostname
+        
         app.databases.use(.sqlite(.file("db.sqlite")), as: .sqlite)
     }
     

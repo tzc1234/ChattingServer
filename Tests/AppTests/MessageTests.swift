@@ -300,7 +300,7 @@ struct MessageTests: AppTests {
                 db: app.db
             )
             
-            let url = "ws://localhost:\(port)/\(messageAPIPath("channel"))"
+            let url = "ws://127.0.0.1:\(port)/\(messageAPIPath("channel"))"
             let promise = eventLoopGroup.next().makePromise(of: ByteBuffer.self)
             var header = HTTPHeaders()
             header.bearerAuthorization = BearerAuthorization(token: accessToken)
