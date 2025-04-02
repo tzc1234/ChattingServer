@@ -25,5 +25,6 @@ func configure(_ app: Application) async throws {
     app.migrations.add(CreateRefreshToken())
     app.migrations.add(CreateContact())
     app.migrations.add(CreateMessage())
+    app.migrations.add(AddDeviceTokenToUser())
     try await app.autoMigrate()
 }
