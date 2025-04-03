@@ -122,15 +122,18 @@ struct AuthenticationController {
     
     @Sendable
     private func updateDeviceToken(req: Request) async throws -> Response {
+        try UpdateDeviceTokenRequest.validate(content: req)
         let deviceToken = try req.content.decode(UpdateDeviceTokenRequest.self).deviceToken
         let userID = try req.auth.require(Payload.self).userID
         guard let user = try await userRepository.findBy(id: userID) else {
             throw AuthenticationError.userNotFound
         }
         
-        try await userRepository.removeDeviceToken(deviceToken)
-        user.deviceToken = deviceToken
-        try await user.update(on: req.db)
+        if user.deviceToken != deviceToken {
+            try await userRepository.remove(deviceToken)
+            user.deviceToken = deviceToken
+            try await user.update(on: req.db)
+        }
         
         return Response()
     }

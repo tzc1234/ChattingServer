@@ -21,7 +21,7 @@ actor UserRepository {
             .first()
     }
     
-    func removeDeviceToken(_ deviceToken: String) async throws {
+    func remove(_ deviceToken: String) async throws {
         let users = try await User.query(on: database)
             .filter(\.$deviceToken == deviceToken)
             .all()

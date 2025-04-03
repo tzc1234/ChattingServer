@@ -14,3 +14,9 @@ struct UpdateDeviceTokenRequest: Content {
         case deviceToken = "device_token"
     }
 }
+
+extension UpdateDeviceTokenRequest: Validatable {
+    static func validations(_ validations: inout Validations) {
+        validations.add("device_token", as: String.self, is: !.empty, customFailureDescription: "Device token is empty!")
+    }
+}
