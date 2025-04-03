@@ -20,15 +20,19 @@ final class DependenciesContainer {
     private let avatarFilenameMaker: @Sendable (String) -> String
     let avatarLinkLoader: AvatarLinkLoader
     private(set) lazy var passwordHasher: UserPasswordHasher = DefaultUserPasswordHasher(application: application)
+    let apnsHandler: APNSHandler
     
     init(application: Application,
          avatarDirectoryPath: String,
          avatarFilenameMaker: @escaping @Sendable (String) -> String,
-         passwordHasher: UserPasswordHasher? = nil) throws {
+         passwordHasher: UserPasswordHasher? = nil,
+         apnsHandler: APNSHandler) throws {
         self.application = application
         self.avatarDirectoryPath = avatarDirectoryPath
         self.avatarFilenameMaker = avatarFilenameMaker
         self.avatarLinkLoader = try AvatarLinkLoader(application: application, directoryPath: avatarDirectoryPath)
+        self.apnsHandler = apnsHandler
+        
         passwordHasher.map { self.passwordHasher = $0 }
     }
 }

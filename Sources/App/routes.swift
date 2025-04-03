@@ -17,7 +17,8 @@ func routes(_ app: Application, dependenciesContainer: DependenciesContainer) th
         try routes.register(collection: ContactController(
             contactRepository: dependenciesContainer.contactRepository,
             userRepository: dependenciesContainer.userRepository,
-            avatarLinkLoader: dependenciesContainer.avatarLinkLoader
+            avatarLinkLoader: dependenciesContainer.avatarLinkLoader,
+            apnsHandler: dependenciesContainer.apnsHandler
         ))
         try routes.register(collection: MessageController(
             contactRepository: dependenciesContainer.contactRepository,

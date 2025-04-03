@@ -18,7 +18,11 @@ struct APNSConfiguration {
     let environment: String
 }
 
-actor APNSHandler {
+protocol APNSHandler: Sendable {
+    func sendNewContactAddedNotification(deviceToken: String, forUserID: Int, contact: ContactResponse) async
+}
+
+actor DefaultAPNSHandler: APNSHandler {
     private struct NewContactAddedPayload: Codable {
         let action: String
         let for_user_id: Int
@@ -69,7 +73,7 @@ actor APNSHandler {
         do {
             try await app.apns.client.sendAlertNotification(alert, deviceToken: deviceToken)
         } catch {
-            print("APNS error: \(error)")
+            app.logger.error(Logger.Message(stringLiteral: error.localizedDescription))
         }
     }
 }

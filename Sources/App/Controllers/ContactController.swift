@@ -6,13 +6,16 @@ struct ContactController {
     private let contactRepository: ContactRepository
     private let userRepository: UserRepository
     private let avatarLinkLoader: AvatarLinkLoader
+    private let apnsHandler: APNSHandler
     
     init(contactRepository: ContactRepository,
          userRepository: UserRepository,
-         avatarLinkLoader: AvatarLinkLoader) {
+         avatarLinkLoader: AvatarLinkLoader,
+         apnsHandler: APNSHandler) {
         self.contactRepository = contactRepository
         self.userRepository = userRepository
         self.avatarLinkLoader = avatarLinkLoader
+        self.apnsHandler = apnsHandler
     }
     
     @Sendable
@@ -43,17 +46,31 @@ struct ContactController {
     
     @Sendable
     private func create(req: Request) async throws -> ContactResponse {
-        let currentUserID = try req.auth.require(Payload.self).userID
         let responderEmail = try req.content.decode(ContactRequest.self).responderEmail
-        let contact = try await contact(for: currentUserID, with: responderEmail)
-        return try await contactResponse(with: contact, currentUserID: currentUserID)
-    }
-    
-    private func contact(for currentUserID: Int, with responderEmail: String) async throws -> Contact {
-        guard let responderID = try await userRepository.findBy(email: responderEmail)?.requireID() else {
+        guard let responder = try await userRepository.findBy(email: responderEmail) else {
             throw ContactError.responderNotFound
         }
         
+        let currentUserID = try req.auth.require(Payload.self).userID
+        let contact = try await contact(for: currentUserID, with: responder.requireID())
+        try await sendNewContactAddedNotification(contact: contact, responder: responder)
+        
+        return try await contactResponse(with: contact, for: currentUserID)
+    }
+    
+    private func sendNewContactAddedNotification(contact: Contact, responder: User) async throws {
+        guard let deviceToken = responder.deviceToken else { return }
+        
+        let responderID = try responder.requireID()
+        let contactResponse = try await contactResponse(with: contact, for: responderID)
+        await apnsHandler.sendNewContactAddedNotification(
+            deviceToken: deviceToken,
+            forUserID: responderID,
+            contact: contactResponse
+        )
+    }
+    
+    private func contact(for currentUserID: Int, with responderID: Int) async throws -> Contact {
         guard currentUserID != responderID else {
             throw ContactError.responderSameAsCurrentUser
         }
@@ -76,7 +93,7 @@ struct ContactController {
         
         try await contactRepository.update(contact, blockedByUserID: currentUserID)
         
-        return try await contactResponse(with: contact, currentUserID: currentUserID)
+        return try await contactResponse(with: contact, for: currentUserID)
     }
     
     @Sendable func unblock(req: Request) async throws -> ContactResponse {
@@ -97,12 +114,12 @@ struct ContactController {
         
         try await contactRepository.update(contact, blockedByUserID: nil)
         
-        return try await contactResponse(with: contact, currentUserID: currentUserID)
+        return try await contactResponse(with: contact, for: currentUserID)
     }
     
-    private func contactResponse(with contact: Contact, currentUserID: Int) async throws -> ContactResponse {
+    private func contactResponse(with contact: Contact, for userID: Int) async throws -> ContactResponse {
         try await contact.toResponse(
-            currentUserID: currentUserID,
+            currentUserID: userID,
             contactRepository: contactRepository,
             avatarLink: avatarLink()
         )
