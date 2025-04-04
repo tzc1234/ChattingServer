@@ -10,14 +10,32 @@ enum Entrypoint {
         try LoggingSystem.bootstrap(from: &env)
         
         let app = try await Application.make(env)
+        
+        guard let apnsKeyP8FilePath = Environment.get("APNS_KEY_P8_FILE_PATH") else {
+            fatalError("APNs key p8 file path not found")
+        }
+        guard let apnsKeyID = Environment.get("APNS_KEY_ID") else {
+            fatalError("APNs key ID not found")
+        }
+        guard let apnsTeamID = Environment.get("APNS_TEAM_ID") else {
+            fatalError("APNs team ID not found")
+        }
+        guard let appBundleID = Environment.get("APNS_APP_BUNDLE_ID") else {
+            fatalError("APNs app bundle ID not found")
+        }
+        guard let apnsEnvironment = Environment.get("APNS_ENVIRONMENT"),
+              ["development", "production"].contains(apnsEnvironment) else {
+            fatalError("APNs environment invalid")
+        }
+        
         let apnsHandler = try DefaultAPNSHandler(
             app: app,
             configuration: APNSConfiguration(
-                keyP8FilePath: app.directory.workingDirectory + Environment.get("APNS_KEY_P8_FILE_PATH")!,
-                keyID: Environment.get("APNS_KEY_ID")!,
-                teamID: Environment.get("APNS_TEAM_ID")!,
-                bundleID: Environment.get("APNS_APP_BUNDLE_ID")!,
-                environment: Environment.get("APNS_ENVIRONMENT")!
+                keyP8FilePath: app.directory.workingDirectory + apnsKeyP8FilePath,
+                keyID: apnsKeyID,
+                teamID: apnsTeamID,
+                bundleID: appBundleID,
+                environment: apnsEnvironment
             )
         )
         let dependenciesContainer = try DependenciesContainer(
