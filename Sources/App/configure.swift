@@ -18,7 +18,10 @@ func configure(_ app: Application) async throws {
     
     app.passwords.use(.bcrypt)
 
-    let secret = Environment.get("JWT_SECRET_KEY")!
+    guard let secret = Environment.get("JWT_SECRET_KEY") else {
+        fatalError("JWT secret key not found")
+    }
+    
     await app.jwt.keys.add(hmac: HMACKey(from: secret), digestAlgorithm: .sha256)
     
     app.migrations.add(CreateUser())
