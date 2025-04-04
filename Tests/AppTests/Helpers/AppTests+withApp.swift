@@ -15,7 +15,8 @@ extension AppTests {
             application: app,
             avatarDirectoryPath: avatarDirectoryPath,
             avatarFilenameMaker: avatarFilename,
-            passwordHasher: passwordHasher
+            passwordHasher: passwordHasher,
+            apnsHandler: DummyAPNSHandler()
         )
         
         do {
@@ -30,4 +31,8 @@ extension AppTests {
         try await app.asyncShutdown()
         try afterShutdown()
     }
+}
+
+actor DummyAPNSHandler: APNSHandler {
+    func sendNewContactAddedNotification(deviceToken: String, forUserID: Int, contact: App.ContactResponse) async {}
 }

@@ -19,6 +19,9 @@ final class User: Model, @unchecked Sendable {
     @Field(key: "avatar_filename")
     var avatarFilename: String?
     
+    @Field(key: "device_token")
+    var deviceToken: String?
+    
     @Timestamp(key: "created_at", on: .create)
     var createdAt: Date?
     
@@ -27,12 +30,19 @@ final class User: Model, @unchecked Sendable {
     
     init() {}
     
-    init(id: Int? = nil, name: String, email: String, password: String, avatarFilename: String? = nil) {
+    init(id: Int? = nil,
+         name: String,
+         email: String,
+         password: String,
+         avatarFilename: String? = nil,
+         deviceToken: String? = nil
+    ) {
         self.id = id
         self.name = name
         self.email = email
         self.password = password
         self.avatarFilename = avatarFilename
+        self.deviceToken = deviceToken
     }
 }
 

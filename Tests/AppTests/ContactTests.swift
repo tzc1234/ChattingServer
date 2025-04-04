@@ -56,8 +56,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 try req.content.encode(contactRequest)
             } afterResponse: { res async throws in
                 #expect(res.status == .badRequest)
-                let error = try res.content.decode(ErrorResponse.self)
-                #expect(error.reason == "Responder cannot be the same as current user")
+                #expect(try errorReason(from: res) == "Responder cannot be the same as current user")
             }
         }
     }
@@ -295,8 +294,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 req.headers.bearerAuthorization = BearerAuthorization(token: tokenResponse.accessToken)
             } afterResponse: { res async throws in
                 #expect(res.status == .notFound)
-                let error = try res.content.decode(ErrorResponse.self)
-                #expect(error.reason == "Contact not found")
+                #expect(try errorReason(from: res) == "Contact not found")
             }
         }
     }
@@ -317,8 +315,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
             } afterResponse: { res async throws in
                 #expect(res.status == .badRequest)
-                let error = try res.content.decode(ErrorResponse.self)
-                #expect(error.reason == "Contact is already blocked")
+                #expect(try errorReason(from: res) == "Contact is already blocked")
             }
         }
     }
@@ -376,8 +373,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 req.headers.bearerAuthorization = BearerAuthorization(token: tokenResponse.accessToken)
             } afterResponse: { res async throws in
                 #expect(res.status == .notFound)
-                let error = try res.content.decode(ErrorResponse.self)
-                #expect(error.reason == "Contact not found")
+                #expect(try errorReason(from: res) == "Contact not found")
             }
         }
     }
@@ -393,8 +389,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
             } afterResponse: { res async throws in
                 #expect(res.status == .badRequest)
-                let error = try res.content.decode(ErrorResponse.self)
-                #expect(error.reason == "Contact is not blocked")
+                #expect(try errorReason(from: res) == "Contact is not blocked")
             }
         }
     }
@@ -418,8 +413,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
                 req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
             } afterResponse: { res async throws in
                 #expect(res.status == .badRequest)
-                let error = try res.content.decode(ErrorResponse.self)
-                #expect(error.reason == "Contact is not blocked by current user, cannot be unblocked")
+                #expect(try errorReason(from: res) == "Contact is not blocked by current user, cannot be unblocked")
             }
         }
     }

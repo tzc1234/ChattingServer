@@ -119,6 +119,24 @@ struct AuthenticationController {
             return await avatarLinkLoader?.get(filename: filename)
         }
     }
+    
+    @Sendable
+    private func updateDeviceToken(req: Request) async throws -> Response {
+        try UpdateDeviceTokenRequest.validate(content: req)
+        let deviceToken = try req.content.decode(UpdateDeviceTokenRequest.self).deviceToken
+        let userID = try req.auth.require(Payload.self).userID
+        guard let user = try await userRepository.findBy(id: userID) else {
+            throw AuthenticationError.userNotFound
+        }
+        
+        if user.deviceToken != deviceToken {
+            try await userRepository.remove(deviceToken)
+            user.deviceToken = deviceToken
+            try await user.update(on: req.db)
+        }
+        
+        return Response()
+    }
 }
 
 extension AuthenticationController: RouteCollection {
@@ -130,6 +148,7 @@ extension AuthenticationController: RouteCollection {
         routes.grouped("me")
             .group(AccessTokenGuardMiddleware(), UserAuthenticator()) { route in
                 route.get(use: getCurrentUser)
+                route.post("deviceToken", use: updateDeviceToken)
             }
     }
 }

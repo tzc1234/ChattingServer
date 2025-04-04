@@ -16,8 +16,7 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
                 try req.content.encode(registerRequest)
             }, afterResponse: { res async throws in
                 #expect(res.status == .badRequest)
-                let error = try res.content.decode(ErrorResponse.self)
-                #expect(error.reason == "name is less than minimum of 3 character(s)")
+                #expect(try errorReason(from: res) == "name is less than minimum of 3 character(s)")
             })
         }
     }
@@ -32,8 +31,7 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
                 try req.content.encode(registerRequest)
             }, afterResponse: { res async throws in
                 #expect(res.status == .badRequest)
-                let error = try res.content.decode(ErrorResponse.self)
-                #expect(error.reason == "password is less than minimum of 3 character(s)")
+                #expect(try errorReason(from: res) == "password is less than minimum of 3 character(s)")
             })
         }
     }
@@ -48,8 +46,7 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
                 try req.content.encode(registerRequest)
             }, afterResponse: { res async throws in
                 #expect(res.status == .badRequest)
-                let error = try res.content.decode(ErrorResponse.self)
-                #expect(error.reason == "email is not a valid email address")
+                #expect(try errorReason(from: res) == "email is not a valid email address")
             })
         }
     }
@@ -65,8 +62,7 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
                 try req.content.encode(registerRequest)
             }, afterResponse: { res async throws in
                 #expect(res.status == .unsupportedMediaType)
-                let error = try res.content.decode(ErrorResponse.self)
-                #expect(error.reason == "Only accept .jpg, .jpeg, or .png files.")
+                #expect(try errorReason(from: res) == "Only accept .jpg, .jpeg, or .png files.")
             })
         }
     }
@@ -114,8 +110,7 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
                 try req.content.encode(loginRequest)
             }, afterResponse: { res async throws in
                 #expect(res.status == .notFound)
-                let error = try res.content.decode(ErrorResponse.self)
-                #expect(error.reason == "User not found")
+                #expect(try errorReason(from: res) == "User not found")
             })
         }
     }
@@ -157,8 +152,7 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
                 try req.content.encode(refreshTokenRequest)
             }, afterResponse: { res async throws in
                 #expect(res.status == .unauthorized)
-                let error = try res.content.decode(ErrorResponse.self)
-                #expect(error.reason == "Refresh token invalid")
+                #expect(try errorReason(from: res) == "Refresh token invalid")
             })
         }
     }
@@ -174,8 +168,7 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
                 try req.content.encode(refreshTokenRequest)
             }, afterResponse: { res async throws in
                 #expect(res.status == .unauthorized)
-                let error = try res.content.decode(ErrorResponse.self)
-                #expect(error.reason == "Refresh token invalid")
+                #expect(try errorReason(from: res) == "Refresh token invalid")
             })
         }
     }
@@ -202,8 +195,7 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
         try await makeApp { app in
             try await app.test(.GET, .apiPath("me"), afterResponse: { res async throws in
                 #expect(res.status == .unauthorized)
-                let error = try res.content.decode(ErrorResponse.self)
-                #expect(error.reason == "Access token invalid")
+                #expect(try errorReason(from: res) == "Access token invalid")
             })
         }
     }
@@ -234,8 +226,7 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
                 req.headers.bearerAuthorization = BearerAuthorization(token: notFoundAccessToken)
             }, afterResponse: { res async throws in
                 #expect(res.status == .notFound)
-                let error = try res.content.decode(ErrorResponse.self)
-                #expect(error.reason == "User not found")
+                #expect(try errorReason(from: res) == "User not found")
             })
         }
     }
@@ -255,6 +246,91 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
                 #expect(userResponse.id == user.id)
                 #expect(userResponse.name == user.name)
                 #expect(userResponse.email == user.email)
+            })
+        }
+    }
+    
+    @Test("update device token failure with no access token")
+    func updateDeviceTokenFailureWithNoAccessToken() async throws {
+        try await makeApp { app in
+            try await app.test(.POST, .apiPath("me", "deviceToken"), afterResponse: { res async throws in
+                #expect(res.status == .unauthorized)
+                #expect(try errorReason(from: res) == "Access token invalid")
+            })
+        }
+    }
+    
+    @Test("update device token failure with an expired access token")
+    func updateDeviceTokenFailureWithExpiredPayload() async throws {
+        try await makeApp { app in
+            let user = try await createUser(app)
+            let expiredPayload = try Payload(for: user, expiration: .distantPast)
+            let expiredAccessToken = try await app.jwt.keys.sign(expiredPayload)
+            
+            try await app.test(.POST, .apiPath("me", "deviceToken"), beforeRequest: { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: expiredAccessToken)
+            }, afterResponse: { res async throws in
+                #expect(res.status == .unauthorized)
+            })
+        }
+    }
+    
+    @Test("update device token failure when user not found")
+    func updateDeviceTokenFailureWhenUserNotFound() async throws {
+        try await makeApp { app in
+            let userNotFound = User(id: 1, name: "not found", email: "not-found@email.com", password: "aPassword")
+            let notFoundPayload = try Payload(for: userNotFound)
+            let notFoundAccessToken = try await app.jwt.keys.sign(notFoundPayload)
+            let updateDeviceTokenRequest = UpdateDeviceTokenRequest(deviceToken: "any-device-token")
+            
+            try await app.test(.POST, .apiPath("me", "deviceToken"), beforeRequest: { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: notFoundAccessToken)
+                try req.content.encode(updateDeviceTokenRequest, as: .formData)
+            }, afterResponse: { res async throws in
+                #expect(res.status == .notFound)
+                #expect(try errorReason(from: res) == "User not found")
+            })
+        }
+    }
+    
+    @Test("update device token failure when empty device token")
+    func updateDeviceTokenFailureWhenEmptyDeviceToken() async throws {
+        try await makeApp { app in
+            let (_, accessToken) = try await createUserAndAccessToken(app)
+            
+            let emptyDeviceToken = ""
+            let emptyDeviceTokenRequest = UpdateDeviceTokenRequest(deviceToken: emptyDeviceToken)
+            
+            try await app.test(.POST, .apiPath("me", "deviceToken"), beforeRequest: { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
+                try req.content.encode(emptyDeviceTokenRequest, as: .formData)
+            }, afterResponse: { res async throws in
+                #expect(res.status == .badRequest)
+                #expect(try errorReason(from: res) == "Device token is empty!")
+            })
+        }
+    }
+    
+    @Test("update device token success after existing device token removal")
+    func updateDeviceTokenSuccessAfterExistingDeviceTokenRemoval() async throws {
+        try await makeApp { app in
+            let db = app.db
+            let (user, accessToken) = try await createUserAndAccessToken(app)
+            let anotherUser = try await createUser(app,
+                name: "another", email: "another@email.com", hashedPassword: "anotherPassword"
+            )
+            
+            let deviceToken = "device-token"
+            try await setDeviceToken(deviceToken, into: anotherUser, on: db)
+            let deviceTokenRequest = UpdateDeviceTokenRequest(deviceToken: deviceToken)
+            
+            try await app.test(.POST, .apiPath("me", "deviceToken"), beforeRequest: { req in
+                req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
+                try req.content.encode(deviceTokenRequest, as: .formData)
+            }, afterResponse: { res async throws in
+                #expect(res.status == .ok)
+                #expect(try await user.refreshed(on: db).deviceToken == deviceToken)
+                #expect(try await anotherUser.refreshed(on: db).deviceToken == nil)
             })
         }
     }
@@ -310,5 +386,20 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
         func verify(_ password: String, hashed: String) async throws -> Bool {
             true
         }
+    }
+    
+    private func setDeviceToken(_ deviceToken: String, into user: User, on db: Database) async throws {
+        user.deviceToken = deviceToken
+        try await user.update(on: db)
+    }
+}
+
+private extension User {
+    func refreshed(on db: Database) async throws -> User {
+        guard let refreshedUser = try await User.find(requireID(), on: db) else {
+            throw Abort(.notFound, reason: "User not found")
+        }
+        
+        return refreshedUser
     }
 }

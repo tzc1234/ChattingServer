@@ -37,9 +37,7 @@ struct MessageTests: AppTests {
                 req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
             } afterResponse: { res async throws in
                 #expect(res.status == .notFound)
-                
-                let error = try res.content.decode(ErrorResponse.self)
-                #expect(error.reason == "Contact not found")
+                #expect(try errorReason(from: res) == "Contact not found")
             }
         }
     }
@@ -300,7 +298,7 @@ struct MessageTests: AppTests {
                 db: app.db
             )
             
-            let url = "ws://localhost:\(port)/\(messageAPIPath("channel"))"
+            let url = "ws://127.0.0.1:\(port)/\(messageAPIPath("channel"))"
             let promise = eventLoopGroup.next().makePromise(of: ByteBuffer.self)
             var header = HTTPHeaders()
             header.bearerAuthorization = BearerAuthorization(token: accessToken)
