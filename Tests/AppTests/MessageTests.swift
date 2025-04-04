@@ -37,9 +37,7 @@ struct MessageTests: AppTests {
                 req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
             } afterResponse: { res async throws in
                 #expect(res.status == .notFound)
-                
-                let error = try res.content.decode(ErrorResponse.self)
-                #expect(error.reason == "Contact not found")
+                #expect(try errorReason(from: res) == "Contact not found")
             }
         }
     }
