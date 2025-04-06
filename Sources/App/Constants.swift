@@ -1,4 +1,5 @@
 import Foundation
+import Vapor
 
 enum Constants {
     static let ACCESS_TOKEN_LIFETIME: Double = 60 * 15 // 15 mins
@@ -6,6 +7,8 @@ enum Constants {
     
     static let AVATARS_DIRECTORY: String = "avatars/"
     static let WEB_SOCKET_SEND_DATA_RETRY_TIMES: UInt = 3
+    
+    static let REGISTER_PAYLOAD_MAX_SIZE: ByteCount = "1mb"
 }
 
 extension TimeInterval {
