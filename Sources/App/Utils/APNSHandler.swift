@@ -67,7 +67,8 @@ actor DefaultAPNSHandler: APNSHandler {
             expiration: .immediately,
             priority: .immediately,
             topic: configuration.bundleID,
-            payload: NewContactAddedPayload(action: "new_contact_added", for_user_id: forUserID, contact: contact)
+            payload: NewContactAddedPayload(action: "new_contact_added", for_user_id: forUserID, contact: contact),
+            mutableContent: 1
         )
         
         do {
