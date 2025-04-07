@@ -156,4 +156,10 @@ actor MessageRepository {
     func create(_ message: Message) async throws {
         try await message.create(on: database)
     }
+    
+    func reloadWithSender(_ message: Message) async throws -> Message? {
+        try await Message.query(on: database).with(\.$sender)
+            .filter(\.$id == message.requireID())
+            .first()
+    }
 }

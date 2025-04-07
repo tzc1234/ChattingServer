@@ -25,12 +25,13 @@ final class DependenciesContainer {
     init(application: Application,
          avatarDirectoryPath: String,
          avatarFilenameMaker: @escaping @Sendable (String) -> String,
+         avatarLinkLoader: AvatarLinkLoader,
          passwordHasher: UserPasswordHasher? = nil,
          apnsHandler: APNSHandler) throws {
         self.application = application
         self.avatarDirectoryPath = avatarDirectoryPath
         self.avatarFilenameMaker = avatarFilenameMaker
-        self.avatarLinkLoader = try AvatarLinkLoader(application: application, directoryPath: avatarDirectoryPath)
+        self.avatarLinkLoader = avatarLinkLoader
         self.apnsHandler = apnsHandler
         
         passwordHasher.map { self.passwordHasher = $0 }

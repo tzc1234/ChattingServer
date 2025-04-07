@@ -297,6 +297,7 @@ struct MessageTests: AppTests {
                 anotherUser: anotherUser,
                 db: app.db
             )
+            try await app.startup()
             
             let url = "ws://127.0.0.1:\(port)/\(messageAPIPath("channel"))"
             let promise = eventLoopGroup.next().makePromise(of: ByteBuffer.self)
@@ -306,7 +307,6 @@ struct MessageTests: AppTests {
             let messageText = "Hello, world!"
             let encoded = try JSONEncoder().encode(IncomingMessage(text: messageText))
             
-            try await app.startup()
             let data = try await WebSocket.connect(to: url, headers: header, on: eventLoopGroup.next()) { ws in
                 ws.send(encoded)
                 ws.onBinary { ws, data in
