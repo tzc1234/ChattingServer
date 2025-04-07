@@ -5,8 +5,6 @@ typealias UserID = Int
 
 actor MessageController {
     private var defaultLimit: Int { 20 }
-    private var contactID: ContactID?
-    private var senderID: UserID?
     
     private let contactRepository: ContactRepository
     private let messageRepository: MessageRepository
@@ -74,14 +72,15 @@ extension MessageController: RouteCollection {
 extension MessageController {
     @Sendable
     private func upgradeToMessagesChannel(req: Request) async throws -> HTTPHeaders? {
-        senderID = try req.auth.require(Payload.self).userID
-        contactID = try ValidatedContactID(req.parameters).value
+        try req.auth.require(Payload.self)
+        let _ = try ValidatedContactID(req.parameters)
         return [:]
     }
     
     @Sendable
     private func messagesChannel(req: Request, ws: WebSocket) async {
-        guard let contactID, let senderID else {
+        guard let contactID = try? ValidatedContactID(req.parameters).value,
+              let senderID = try? req.auth.require(Payload.self).userID else {
             try? await ws.close(code: .unexpectedServerError)
             return
         }
