@@ -40,7 +40,7 @@ struct ContactController {
         return try await contacts.toResponse(
             currentUserID: currentUserID,
             contactRepository: contactRepository,
-            avatarLink: avatarLink()
+            avatarLink: avatarLinkLoader.avatarLink()
         )
     }
     
@@ -121,16 +121,8 @@ struct ContactController {
         try await contact.toResponse(
             currentUserID: userID,
             contactRepository: contactRepository,
-            avatarLink: avatarLink()
+            avatarLink: avatarLinkLoader.avatarLink()
         )
-    }
-    
-    private func avatarLink() -> (String?) async -> String? {
-        { [weak avatarLinkLoader] filename in
-            guard let filename else { return nil }
-            
-            return await avatarLinkLoader?.get(filename: filename)
-        }
     }
 }
 

@@ -11,12 +11,10 @@ extension AppTests {
                  _ test: (Application) async throws -> (),
                  afterShutdown: () throws -> Void = {}) async throws {
         let app = try await Application.make(.testing, eventLoopGroup != nil ? .shared(eventLoopGroup!) : .singleton)
-        let avatarLinkLoader = try AvatarLinkLoader(application: app, directoryPath: avatarDirectoryPath)
         let di = try DependenciesContainer(
             application: app,
             avatarDirectoryPath: avatarDirectoryPath,
             avatarFilenameMaker: avatarFilename,
-            avatarLinkLoader: avatarLinkLoader,
             passwordHasher: passwordHasher,
             apnsHandler: DummyAPNSHandler()
         )
@@ -37,5 +35,5 @@ extension AppTests {
 
 actor DummyAPNSHandler: APNSHandler {
     func sendNewContactAddedNotification(deviceToken: String, forUserID: Int, contact: ContactResponse) async {}
-    func sendMessageNotification(deviceToken: String, message: Message, receiverID: Int) async throws {}
+    func sendMessageNotification(deviceToken: String, forUserID: Int, contact: ContactResponse) async {}
 }

@@ -20,7 +20,7 @@ struct APNSConfiguration {
 
 protocol APNSHandler: Sendable {
     func sendNewContactAddedNotification(deviceToken: String, forUserID: Int, contact: ContactResponse) async
-    func sendMessageNotification(deviceToken: String, message: Message, receiverID: Int) async throws
+    func sendMessageNotification(deviceToken: String, forUserID: Int, contact: ContactResponse) async
 }
 
 actor DefaultAPNSHandler: APNSHandler {
@@ -33,18 +33,14 @@ actor DefaultAPNSHandler: APNSHandler {
     private struct MessagePayload: Codable {
         let action: String
         let for_user_id: Int
-        let sender_id: Int
-        let sender_name: String
-        let avatar_url: String?
+        let contact: ContactResponse
     }
     
     private let app: Application
-    private let avatarLinkLoader: AvatarLinkLoader
     private let configuration: APNSConfiguration
     
-    init(app: Application, avatarLinkLoader: AvatarLinkLoader, configuration: APNSConfiguration) throws {
+    init(app: Application, configuration: APNSConfiguration) throws {
         self.app = app
-        self.avatarLinkLoader = avatarLinkLoader
         self.configuration = configuration
         
         let apnsConfig = APNSClientConfiguration(
@@ -84,27 +80,19 @@ actor DefaultAPNSHandler: APNSHandler {
         await send(alert, with: deviceToken)
     }
     
-    func sendMessageNotification(deviceToken: String, message: Message, receiverID: Int) async throws {
-        let avatarURL: String? = await {
-            guard let filename = message.sender.avatarFilename else { return nil }
-            return await avatarLinkLoader.get(filename: filename)
-        }()
+    func sendMessageNotification(deviceToken: String, forUserID: Int, contact: ContactResponse) async {
+        guard let message = contact.lastMessage else { return }
+        
         let alert = APNSAlertNotification(
             alert: APNSAlertNotificationContent(
-                title: .raw(message.sender.name),
+                title: .raw(contact.responder.name),
                 body: .raw(message.text)
             ),
             expiration: .immediately,
             priority: .immediately,
             topic: configuration.bundleID,
-            payload: MessagePayload(
-                action: "message",
-                for_user_id: receiverID,
-                sender_id: try message.sender.requireID(),
-                sender_name: message.sender.name,
-                avatar_url: avatarURL
-            ),
-            threadID: "message-\(try message.sender.requireID())",
+            payload: MessagePayload(action: "message", for_user_id: forUserID, contact: contact),
+            threadID: "message-\(contact.id)",
             mutableContent: 1
         )
         await send(alert, with: deviceToken)

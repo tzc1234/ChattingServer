@@ -28,13 +28,8 @@ enum Entrypoint {
             fatalError("APNs environment invalid")
         }
         
-        let avatarLinkLoader = try AvatarLinkLoader(
-            application: app,
-            directoryPath: app.directory.publicDirectory + Constants.AVATARS_DIRECTORY
-        )
         let apnsHandler = try DefaultAPNSHandler(
             app: app,
-            avatarLinkLoader: avatarLinkLoader,
             configuration: APNSConfiguration(
                 keyP8FilePath: app.directory.workingDirectory + apnsKeyP8FilePath,
                 keyID: apnsKeyID,
@@ -50,7 +45,6 @@ enum Entrypoint {
                 let fileExtension = (filename.lowercased() as NSString).pathExtension
                 return "\(Date().timeIntervalSince1970).\(fileExtension)"
             },
-            avatarLinkLoader: avatarLinkLoader,
             apnsHandler: apnsHandler
         )
 

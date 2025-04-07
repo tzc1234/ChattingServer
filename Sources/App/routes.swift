@@ -24,6 +24,7 @@ func routes(_ app: Application, dependenciesContainer: DependenciesContainer) th
             contactRepository: dependenciesContainer.contactRepository,
             messageRepository: dependenciesContainer.messageRepository,
             webSocketStore: dependenciesContainer.webSocketStore,
+            avatarLinkLoader: dependenciesContainer.avatarLinkLoader,
             apnsHandler: dependenciesContainer.apnsHandler
         ))
     }
