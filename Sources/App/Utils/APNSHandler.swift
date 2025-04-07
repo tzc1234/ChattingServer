@@ -20,10 +20,17 @@ struct APNSConfiguration {
 
 protocol APNSHandler: Sendable {
     func sendNewContactAddedNotification(deviceToken: String, forUserID: Int, contact: ContactResponse) async
+    func sendMessageNotification(deviceToken: String, forUserID: Int, contact: ContactResponse) async
 }
 
 actor DefaultAPNSHandler: APNSHandler {
     private struct NewContactAddedPayload: Codable {
+        let action: String
+        let for_user_id: Int
+        let contact: ContactResponse
+    }
+    
+    private struct MessagePayload: Codable {
         let action: String
         let for_user_id: Int
         let contact: ContactResponse
@@ -70,7 +77,28 @@ actor DefaultAPNSHandler: APNSHandler {
             payload: NewContactAddedPayload(action: "new_contact_added", for_user_id: forUserID, contact: contact),
             mutableContent: 1
         )
+        await send(alert, with: deviceToken)
+    }
+    
+    func sendMessageNotification(deviceToken: String, forUserID: Int, contact: ContactResponse) async {
+        guard let message = contact.lastMessage else { return }
         
+        let alert = APNSAlertNotification(
+            alert: APNSAlertNotificationContent(
+                title: .raw(contact.responder.name),
+                body: .raw(message.text)
+            ),
+            expiration: .immediately,
+            priority: .immediately,
+            topic: configuration.bundleID,
+            payload: MessagePayload(action: "message", for_user_id: forUserID, contact: contact),
+            threadID: "message-\(contact.id)",
+            mutableContent: 1
+        )
+        await send(alert, with: deviceToken)
+    }
+    
+    private func send<Payload>(_ alert: APNSAlertNotification<Payload>, with deviceToken: String) async {
         do {
             try await app.apns.client.sendAlertNotification(alert, deviceToken: deviceToken)
         } catch {

@@ -9,11 +9,19 @@ actor MessageController {
     private let contactRepository: ContactRepository
     private let messageRepository: MessageRepository
     private let webSocketStore: WebSocketStore
+    private let avatarLinkLoader: AvatarLinkLoader
+    private let apnsHandler: APNSHandler
     
-    init(contactRepository: ContactRepository, messageRepository: MessageRepository, webSocketStore: WebSocketStore) {
+    init(contactRepository: ContactRepository,
+         messageRepository: MessageRepository,
+         webSocketStore: WebSocketStore,
+         avatarLinkLoader: AvatarLinkLoader,
+         apnsHandler: APNSHandler) {
         self.contactRepository = contactRepository
         self.messageRepository = messageRepository
         self.webSocketStore = webSocketStore
+        self.avatarLinkLoader = avatarLinkLoader
+        self.apnsHandler = apnsHandler
     }
     
     @Sendable
@@ -72,8 +80,12 @@ extension MessageController: RouteCollection {
 extension MessageController {
     @Sendable
     private func upgradeToMessagesChannel(req: Request) async throws -> HTTPHeaders? {
-        try req.auth.require(Payload.self)
-        let _ = try ValidatedContactID(req.parameters)
+        let userID = try req.auth.require(Payload.self).userID
+        let contactID = try ValidatedContactID(req.parameters).value
+        guard (try? await contactRepository.findBy(id: contactID, userID: userID)) != nil else {
+            throw ContactError.contactNotFound
+        }
+        
         return [:]
     }
     
@@ -126,6 +138,17 @@ extension MessageController {
                     logger: req.logger,
                     retry: Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES
                 )
+                
+                if let contact = try await contactRepository.findBy(id: contactID, userID: senderID) {
+                    let receiver = try await contact.anotherUser(for: senderID, on: req.db)
+                    if let receiverID = receiver.id, let receiverDeviceToken = receiver.deviceToken {
+                        await apnsHandler.sendMessageNotification(
+                            deviceToken: receiverDeviceToken,
+                            forUserID: receiverID,
+                            contact: try contactResponse(with: contact, for: receiverID, lastMessage: messageResponse)
+                        )
+                    }
+                }
             } catch {
                 req.logger.error(Logger.Message(stringLiteral: error.localizedDescription))
             }
@@ -150,6 +173,33 @@ extension MessageController {
     private func close(_ ws: WebSocket, for contactID: ContactID, with userID: UserID) async throws {
         try await ws.close(code: .unacceptableData)
         await webSocketStore.remove(for: contactID, with: userID)
+    }
+    
+    private func contactResponse(with contact: Contact,
+                                 for userID: Int,
+                                 lastMessage: MessageResponse) async throws -> ContactResponse {
+        try await contact.toResponse(
+            for: userID,
+            contactRepository: contactRepository,
+            avatarLink: avatarLinkLoader.avatarLink(),
+            lastMessage: lastMessage
+        )
+    }
+}
+
+private extension Contact {
+    func toResponse(for userID: Int,
+                    contactRepository: ContactRepository,
+                    avatarLink: (String?) async -> String?,
+                    lastMessage: MessageResponse) async throws -> ContactResponse {
+        try await ContactResponse(
+            id: requireID(),
+            responder: contactRepository.responderFor(self, by: userID).toResponse(avatarLink: avatarLink),
+            blockedByUserID: $blockedBy.id,
+            unreadMessageCount: contactRepository.unreadMessagesCountFor(self, senderIsNot: userID),
+            lastUpdate: lastMessage.createdAt,
+            lastMessage: lastMessage
+        )
     }
 }
 

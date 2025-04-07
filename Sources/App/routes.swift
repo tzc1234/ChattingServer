@@ -23,7 +23,9 @@ func routes(_ app: Application, dependenciesContainer: DependenciesContainer) th
         try routes.register(collection: MessageController(
             contactRepository: dependenciesContainer.contactRepository,
             messageRepository: dependenciesContainer.messageRepository,
-            webSocketStore: dependenciesContainer.webSocketStore
+            webSocketStore: dependenciesContainer.webSocketStore,
+            avatarLinkLoader: dependenciesContainer.avatarLinkLoader,
+            apnsHandler: dependenciesContainer.apnsHandler
         ))
     }
 }

@@ -24,3 +24,13 @@ actor AvatarLinkLoader {
         return "http://\(baseURL):\(port)/\(lastComponent)/\(filename)"
     }
 }
+
+extension AvatarLinkLoader {
+    func avatarLink() -> @Sendable (String?) async -> String? {
+        { [weak self] filename in
+            guard let filename else { return nil }
+            
+            return await self?.get(filename: filename)
+        }
+    }
+}
