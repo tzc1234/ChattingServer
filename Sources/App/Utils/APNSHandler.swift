@@ -24,13 +24,7 @@ protocol APNSHandler: Sendable {
 }
 
 actor DefaultAPNSHandler: APNSHandler {
-    private struct NewContactAddedPayload: Codable {
-        let action: String
-        let for_user_id: Int
-        let contact: ContactResponse
-    }
-    
-    private struct MessagePayload: Codable {
+    private struct Payload: Codable {
         let action: String
         let for_user_id: Int
         let contact: ContactResponse
@@ -74,7 +68,7 @@ actor DefaultAPNSHandler: APNSHandler {
             expiration: .immediately,
             priority: .immediately,
             topic: configuration.bundleID,
-            payload: NewContactAddedPayload(action: "new_contact_added", for_user_id: forUserID, contact: contact),
+            payload: Payload(action: "new_contact_added", for_user_id: forUserID, contact: contact),
             mutableContent: 1
         )
         await send(alert, with: deviceToken)
@@ -92,7 +86,7 @@ actor DefaultAPNSHandler: APNSHandler {
             expiration: .immediately,
             priority: .immediately,
             topic: configuration.bundleID,
-            payload: MessagePayload(action: "message", for_user_id: forUserID, contact: contact),
+            payload: Payload(action: "message", for_user_id: forUserID, contact: contact),
             threadID: "message-\(contact.id)",
             mutableContent: 1
         )
