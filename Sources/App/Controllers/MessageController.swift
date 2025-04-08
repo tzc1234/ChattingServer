@@ -74,22 +74,11 @@ extension MessageController: RouteCollection {
         
         let protectedWebSocket = protected
             .grouped(MessageChannelContactValidationMiddleware(contactRepository: contactRepository))
-        protectedWebSocket.webSocket("channel", shouldUpgrade: upgradeToMessagesChannel, onUpgrade: messagesChannel)
+        protectedWebSocket.webSocket("channel", onUpgrade: messagesChannel)
     }
 }
 
 extension MessageController {
-    @Sendable
-    private func upgradeToMessagesChannel(req: Request) async throws -> HTTPHeaders? {
-        let userID = try req.auth.require(Payload.self).userID
-        let contactID = try ValidatedContactID(req.parameters).value
-        guard (try? await contactRepository.findBy(id: contactID, userID: userID)) != nil else {
-            throw ContactError.contactNotFound
-        }
-        
-        return [:]
-    }
-    
     @Sendable
     private func messagesChannel(req: Request, ws: WebSocket) async {
         guard let contactID = try? ValidatedContactID(req.parameters).value,
