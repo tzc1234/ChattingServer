@@ -20,7 +20,7 @@ struct APNSConfiguration {
 
 protocol APNSHandler: Sendable {
     func sendNewContactAddedNotification(deviceToken: String, forUserID: Int, contact: ContactResponse) async
-    func sendMessageNotification(deviceToken: String, forUserID: Int, contact: ContactResponse) async
+    func sendMessageNotification(deviceToken: String, forUserID: Int, contact: ContactResponse, messageText: String) async
 }
 
 actor DefaultAPNSHandler: APNSHandler {
@@ -80,13 +80,14 @@ actor DefaultAPNSHandler: APNSHandler {
         await send(alert, with: deviceToken)
     }
     
-    func sendMessageNotification(deviceToken: String, forUserID: Int, contact: ContactResponse) async {
-        guard let message = contact.lastMessage else { return }
-        
+    func sendMessageNotification(deviceToken: String,
+                                 forUserID: Int,
+                                 contact: ContactResponse,
+                                 messageText: String) async {
         let alert = APNSAlertNotification(
             alert: APNSAlertNotificationContent(
                 title: .raw(contact.responder.name),
-                body: .raw(message.text)
+                body: .raw(messageText)
             ),
             expiration: .immediately,
             priority: .immediately,

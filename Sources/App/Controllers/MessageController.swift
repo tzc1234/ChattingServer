@@ -140,7 +140,12 @@ extension MessageController {
                     retry: Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES
                 )
                 
-                try await sendMessageNotification(contactID: contactID, senderID: senderID, db: req.db)
+                try await sendMessageNotification(
+                    contactID: contactID,
+                    senderID: senderID,
+                    db: req.db,
+                    messageText: message.text
+                )
             } catch {
                 req.logger.error(Logger.Message(stringLiteral: error.localizedDescription))
             }
@@ -167,7 +172,10 @@ extension MessageController {
         await webSocketStore.remove(for: contactID, userID: userID)
     }
     
-    private func sendMessageNotification(contactID: ContactID, senderID: UserID, db: Database) async throws {
+    private func sendMessageNotification(contactID: ContactID,
+                                         senderID: UserID,
+                                         db: Database,
+                                         messageText: String) async throws {
         guard let contact = try await contactRepository.findBy(id: contactID, userID: senderID) else { return }
         
         let receiver = try await contactRepository.anotherUser(contact, for: senderID)
@@ -179,7 +187,8 @@ extension MessageController {
         await apnsHandler.sendMessageNotification(
             deviceToken: receiverDeviceToken,
             forUserID: receiverID,
-            contact: try contactResponse(contact, for: receiverID)
+            contact: try contactResponse(contact, for: receiverID),
+            messageText: messageText
         )
     }
     
