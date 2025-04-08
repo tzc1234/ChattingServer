@@ -20,17 +20,11 @@ struct APNSConfiguration {
 
 protocol APNSHandler: Sendable {
     func sendNewContactAddedNotification(deviceToken: String, forUserID: Int, contact: ContactResponse) async
-    func sendMessageNotification(deviceToken: String, forUserID: Int, contact: ContactResponse) async
+    func sendMessageNotification(deviceToken: String, forUserID: Int, contact: ContactResponse, messageText: String) async
 }
 
 actor DefaultAPNSHandler: APNSHandler {
-    private struct NewContactAddedPayload: Codable {
-        let action: String
-        let for_user_id: Int
-        let contact: ContactResponse
-    }
-    
-    private struct MessagePayload: Codable {
+    private struct Payload: Codable {
         let action: String
         let for_user_id: Int
         let contact: ContactResponse
@@ -74,24 +68,25 @@ actor DefaultAPNSHandler: APNSHandler {
             expiration: .immediately,
             priority: .immediately,
             topic: configuration.bundleID,
-            payload: NewContactAddedPayload(action: "new_contact_added", for_user_id: forUserID, contact: contact),
+            payload: Payload(action: "new_contact_added", for_user_id: forUserID, contact: contact),
             mutableContent: 1
         )
         await send(alert, with: deviceToken)
     }
     
-    func sendMessageNotification(deviceToken: String, forUserID: Int, contact: ContactResponse) async {
-        guard let message = contact.lastMessage else { return }
-        
+    func sendMessageNotification(deviceToken: String,
+                                 forUserID: Int,
+                                 contact: ContactResponse,
+                                 messageText: String) async {
         let alert = APNSAlertNotification(
             alert: APNSAlertNotificationContent(
                 title: .raw(contact.responder.name),
-                body: .raw(message.text)
+                body: .raw(messageText)
             ),
             expiration: .immediately,
             priority: .immediately,
             topic: configuration.bundleID,
-            payload: MessagePayload(action: "message", for_user_id: forUserID, contact: contact),
+            payload: Payload(action: "message", for_user_id: forUserID, contact: contact),
             threadID: "message-\(contact.id)",
             mutableContent: 1
         )

@@ -30,12 +30,21 @@ final class Contact: Model, @unchecked Sendable {
         self.$user2.id = userID2
         self.$blockedBy.id = blockedByUserID
     }
-    
-    func anotherUser(for userID: Int, on db: Database) async throws -> User {
-        let user1 = try await $user1.get(on: db)
-        if user1.id == userID {
-            return try await $user2.get(on: db)
-        }
-        return user1
+}
+
+extension Contact {
+    func toResponse(currentUserID: Int,
+                    contactRepository: ContactRepository,
+                    avatarLink: (String?) async -> String?) async throws -> ContactResponse {
+        guard let lastUpdate = try await contactRepository.lastUpdateFor(self) else { throw ContactError.databaseError }
+        
+        return try await ContactResponse(
+            id: requireID(),
+            responder: contactRepository.responderFor(self, by: currentUserID).toResponse(avatarLink: avatarLink),
+            blockedByUserID: $blockedBy.id,
+            unreadMessageCount: contactRepository.unreadMessagesCountFor(self, senderIsNot: currentUserID),
+            lastUpdate: lastUpdate,
+            lastMessage: contactRepository.lastMessageFor(self, senderIsNot: currentUserID)?.toResponse()
+        )
     }
 }

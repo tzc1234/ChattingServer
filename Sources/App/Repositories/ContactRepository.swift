@@ -107,6 +107,14 @@ actor ContactRepository {
             .filter(\.$sender.$id != userID)
             .first()
     }
+    
+    func anotherUser(_ contact: Contact, for userID: Int) async throws -> User {
+        let user1 = try await contact.$user1.get(on: database)
+        if user1.id == userID {
+            return try await contact.$user2.get(on: database)
+        }
+        return user1
+    }
 }
 
 private extension SQLSelectBuilder {

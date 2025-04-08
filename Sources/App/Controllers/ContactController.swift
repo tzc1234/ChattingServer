@@ -156,20 +156,3 @@ private extension [Contact] {
         return ContactsResponse(contacts: contactResponses)
     }
 }
-
-private extension Contact {
-    func toResponse(currentUserID: Int,
-                    contactRepository: ContactRepository,
-                    avatarLink: (String?) async -> String?) async throws -> ContactResponse {
-        guard let lastUpdate = try await contactRepository.lastUpdateFor(self) else { throw ContactError.databaseError }
-        
-        return try await ContactResponse(
-            id: requireID(),
-            responder: contactRepository.responderFor(self, by: currentUserID).toResponse(avatarLink: avatarLink),
-            blockedByUserID: $blockedBy.id,
-            unreadMessageCount: contactRepository.unreadMessagesCountFor(self, senderIsNot: currentUserID),
-            lastUpdate: lastUpdate,
-            lastMessage: contactRepository.lastMessageFor(self, senderIsNot: currentUserID)?.toResponse()
-        )
-    }
-}

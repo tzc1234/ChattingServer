@@ -1,4 +1,5 @@
 import Vapor
+import Fluent
 
 typealias ContactID = Int
 typealias UserID = Int
@@ -73,22 +74,11 @@ extension MessageController: RouteCollection {
         
         let protectedWebSocket = protected
             .grouped(MessageChannelContactValidationMiddleware(contactRepository: contactRepository))
-        protectedWebSocket.webSocket("channel", shouldUpgrade: upgradeToMessagesChannel, onUpgrade: messagesChannel)
+        protectedWebSocket.webSocket("channel", onUpgrade: messagesChannel)
     }
 }
 
 extension MessageController {
-    @Sendable
-    private func upgradeToMessagesChannel(req: Request) async throws -> HTTPHeaders? {
-        let userID = try req.auth.require(Payload.self).userID
-        let contactID = try ValidatedContactID(req.parameters).value
-        guard (try? await contactRepository.findBy(id: contactID, userID: userID)) != nil else {
-            throw ContactError.contactNotFound
-        }
-        
-        return [:]
-    }
-    
     @Sendable
     private func messagesChannel(req: Request, ws: WebSocket) async {
         guard let contactID = try? ValidatedContactID(req.parameters).value,
@@ -97,10 +87,10 @@ extension MessageController {
             return
         }
         
-        await webSocketStore.add(ws, for: contactID, with: senderID)
+        await webSocketStore.add(ws, for: contactID, userID: senderID)
         
         ws.onClose.whenComplete { [weak webSocketStore] _ in
-            Task { await webSocketStore?.remove(for: contactID, with: senderID) }
+            Task { await webSocketStore?.remove(for: contactID, userID: senderID) }
         }
         
         ws.onText { [weak self] ws, text in
@@ -139,16 +129,12 @@ extension MessageController {
                     retry: Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES
                 )
                 
-                if let contact = try await contactRepository.findBy(id: contactID, userID: senderID) {
-                    let receiver = try await contact.anotherUser(for: senderID, on: req.db)
-                    if let receiverID = receiver.id, let receiverDeviceToken = receiver.deviceToken {
-                        await apnsHandler.sendMessageNotification(
-                            deviceToken: receiverDeviceToken,
-                            forUserID: receiverID,
-                            contact: try contactResponse(with: contact, for: receiverID, lastMessage: messageResponse)
-                        )
-                    }
-                }
+                try await sendMessageNotification(
+                    contactID: contactID,
+                    senderID: senderID,
+                    db: req.db,
+                    messageText: message.text
+                )
             } catch {
                 req.logger.error(Logger.Message(stringLiteral: error.localizedDescription))
             }
@@ -172,33 +158,34 @@ extension MessageController {
     
     private func close(_ ws: WebSocket, for contactID: ContactID, with userID: UserID) async throws {
         try await ws.close(code: .unacceptableData)
-        await webSocketStore.remove(for: contactID, with: userID)
+        await webSocketStore.remove(for: contactID, userID: userID)
     }
     
-    private func contactResponse(with contact: Contact,
-                                 for userID: Int,
-                                 lastMessage: MessageResponse) async throws -> ContactResponse {
-        try await contact.toResponse(
-            for: userID,
-            contactRepository: contactRepository,
-            avatarLink: avatarLinkLoader.avatarLink(),
-            lastMessage: lastMessage
+    private func sendMessageNotification(contactID: ContactID,
+                                         senderID: UserID,
+                                         db: Database,
+                                         messageText: String) async throws {
+        guard let contact = try await contactRepository.findBy(id: contactID, userID: senderID) else { return }
+        
+        let receiver = try await contactRepository.anotherUser(contact, for: senderID)
+        guard let receiverID = receiver.id, let receiverDeviceToken = receiver.deviceToken else { return }
+        
+        // Only send notification when receiver is not chatting with sender.
+        guard await !webSocketStore.isExisted(for: contactID, userID: receiverID) else { return }
+        
+        await apnsHandler.sendMessageNotification(
+            deviceToken: receiverDeviceToken,
+            forUserID: receiverID,
+            contact: try contactResponse(contact, for: receiverID),
+            messageText: messageText
         )
     }
-}
-
-private extension Contact {
-    func toResponse(for userID: Int,
-                    contactRepository: ContactRepository,
-                    avatarLink: (String?) async -> String?,
-                    lastMessage: MessageResponse) async throws -> ContactResponse {
-        try await ContactResponse(
-            id: requireID(),
-            responder: contactRepository.responderFor(self, by: userID).toResponse(avatarLink: avatarLink),
-            blockedByUserID: $blockedBy.id,
-            unreadMessageCount: contactRepository.unreadMessagesCountFor(self, senderIsNot: userID),
-            lastUpdate: lastMessage.createdAt,
-            lastMessage: lastMessage
+    
+    private func contactResponse(_ contact: Contact, for userID: Int) async throws -> ContactResponse {
+        try await contact.toResponse(
+            currentUserID: userID,
+            contactRepository: contactRepository,
+            avatarLink: avatarLinkLoader.avatarLink()
         )
     }
 }
