@@ -1,4 +1,5 @@
 import Vapor
+import Fluent
 
 typealias ContactID = Int
 typealias UserID = Int
@@ -97,10 +98,10 @@ extension MessageController {
             return
         }
         
-        await webSocketStore.add(ws, for: contactID, with: senderID)
+        await webSocketStore.add(ws, for: contactID, userID: senderID)
         
         ws.onClose.whenComplete { [weak webSocketStore] _ in
-            Task { await webSocketStore?.remove(for: contactID, with: senderID) }
+            Task { await webSocketStore?.remove(for: contactID, userID: senderID) }
         }
         
         ws.onText { [weak self] ws, text in
@@ -139,16 +140,7 @@ extension MessageController {
                     retry: Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES
                 )
                 
-                if let contact = try await contactRepository.findBy(id: contactID, userID: senderID) {
-                    let receiver = try await contact.anotherUser(for: senderID, on: req.db)
-                    if let receiverID = receiver.id, let receiverDeviceToken = receiver.deviceToken {
-                        await apnsHandler.sendMessageNotification(
-                            deviceToken: receiverDeviceToken,
-                            forUserID: receiverID,
-                            contact: try contactResponse(with: contact, for: receiverID, lastMessage: messageResponse)
-                        )
-                    }
-                }
+                try await sendMessageNotification(contactID: contactID, senderID: senderID, db: req.db)
             } catch {
                 req.logger.error(Logger.Message(stringLiteral: error.localizedDescription))
             }
@@ -172,33 +164,30 @@ extension MessageController {
     
     private func close(_ ws: WebSocket, for contactID: ContactID, with userID: UserID) async throws {
         try await ws.close(code: .unacceptableData)
-        await webSocketStore.remove(for: contactID, with: userID)
+        await webSocketStore.remove(for: contactID, userID: userID)
     }
     
-    private func contactResponse(with contact: Contact,
-                                 for userID: Int,
-                                 lastMessage: MessageResponse) async throws -> ContactResponse {
-        try await contact.toResponse(
-            for: userID,
-            contactRepository: contactRepository,
-            avatarLink: avatarLinkLoader.avatarLink(),
-            lastMessage: lastMessage
+    private func sendMessageNotification(contactID: ContactID, senderID: UserID, db: Database) async throws {
+        guard let contact = try await contactRepository.findBy(id: contactID, userID: senderID) else { return }
+        
+        let receiver = try await contactRepository.anotherUser(contact, for: senderID)
+        guard let receiverID = receiver.id, let receiverDeviceToken = receiver.deviceToken else { return }
+        
+        // Only send notification when receiver is not chatting with sender.
+        guard await !webSocketStore.isExisted(for: contactID, userID: receiverID) else { return }
+        
+        await apnsHandler.sendMessageNotification(
+            deviceToken: receiverDeviceToken,
+            forUserID: receiverID,
+            contact: try contactResponse(contact, for: receiverID)
         )
     }
-}
-
-private extension Contact {
-    func toResponse(for userID: Int,
-                    contactRepository: ContactRepository,
-                    avatarLink: (String?) async -> String?,
-                    lastMessage: MessageResponse) async throws -> ContactResponse {
-        try await ContactResponse(
-            id: requireID(),
-            responder: contactRepository.responderFor(self, by: userID).toResponse(avatarLink: avatarLink),
-            blockedByUserID: $blockedBy.id,
-            unreadMessageCount: contactRepository.unreadMessagesCountFor(self, senderIsNot: userID),
-            lastUpdate: lastMessage.createdAt,
-            lastMessage: lastMessage
+    
+    private func contactResponse(_ contact: Contact, for userID: Int) async throws -> ContactResponse {
+        try await contact.toResponse(
+            currentUserID: userID,
+            contactRepository: contactRepository,
+            avatarLink: avatarLinkLoader.avatarLink()
         )
     }
 }

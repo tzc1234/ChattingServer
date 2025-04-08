@@ -157,7 +157,7 @@ private extension [Contact] {
     }
 }
 
-private extension Contact {
+extension Contact {
     func toResponse(currentUserID: Int,
                     contactRepository: ContactRepository,
                     avatarLink: (String?) async -> String?) async throws -> ContactResponse {
