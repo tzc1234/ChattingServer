@@ -8,7 +8,7 @@ actor MessageRepository {
         case after(Int)
     }
     
-    struct Metadata: Codable {
+    struct Metadata: Decodable {
         let previousID: Int?
         let nextID: Int?
         
@@ -122,7 +122,7 @@ actor MessageRepository {
             }
             SQLQueryString("""
                 SELECT * FROM messages
-                WHERE id BETWEEN ifnull((SELECT id FROM lower_bound_message_id), 1)
+                WHERE id BETWEEN ifnull((SELECT id FROM lower_bound_message_id), \(bind: firstUnreadMessageID))
                 AND (SELECT id FROM upper_bound_message_id)
                 AND contact_id = \(bind: contactID)
                 ORDER BY id ASC
