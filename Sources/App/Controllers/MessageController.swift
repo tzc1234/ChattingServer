@@ -41,7 +41,17 @@ actor MessageController {
             messageID: MessageRepository.MessageID(indexRequest: indexRequest),
             limit: indexRequest.limit ?? defaultLimit
         )
-        return MessagesResponse(messages: try messages.map { try $0.toResponse() })
+        
+        let metadata = if let beginID = try messages.first?.requireID(), let endID = try messages.last?.requireID() {
+            try await messageRepository.getMetadata(from: beginID, to: endID, contactID: contactID)
+        } else {
+            MessageRepository.Metadata(previousID: nil, nextID: nil)
+        }
+        
+        return MessagesResponse(
+            messages: try messages.map { try $0.toResponse() },
+            metadata: MessagesResponse.Metadata(metadata)
+        )
     }
     
     @Sendable
@@ -203,5 +213,12 @@ private extension MessageRepository.MessageID {
         }
         
         return nil
+    }
+}
+
+private extension MessagesResponse.Metadata {
+    init(_ metadata: MessageRepository.Metadata) {
+        self.previousID = metadata.previousID
+        self.nextID = metadata.nextID
     }
 }

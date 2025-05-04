@@ -12,8 +12,6 @@ actor MessageRepository {
         let previousID: Int?
         let nextID: Int?
         
-        var isNil: Bool { previousID == nil && nextID == nil }
-        
         enum CodingKeys: String, CodingKey {
             case previousID = "previous_id"
             case nextID = "next_id"
@@ -28,6 +26,7 @@ actor MessageRepository {
     
     enum Error: Swift.Error {
         case databaseConversion
+        case metadataNotFound
     }
     
     func getMessages(contactID: ContactID,
@@ -149,7 +148,7 @@ actor MessageRepository {
         try row.decode(fluentModel: Message.self)
     }
     
-    func getMetadata(from beginMessageID: Int, to endMessageID: Int, contactID: Int) async throws -> Metadata? {
+    func getMetadata(from beginMessageID: Int, to endMessageID: Int, contactID: Int) async throws -> Metadata {
         let sql: SQLQueryString = """
             SELECT m1.previous_id, m2.next_id FROM (
                 SELECT max(id) AS previous_id, ifnull(contact_id, \(bind: contactID)) AS contact_id FROM messages
@@ -167,8 +166,8 @@ actor MessageRepository {
         guard let metadata = try await sqlDatabase()
             .raw(sql)
             .first()?
-            .decode(model: Metadata.self), !metadata.isNil else {
-            return nil
+            .decode(model: Metadata.self) else {
+            throw Error.metadataNotFound
         }
         
         return metadata

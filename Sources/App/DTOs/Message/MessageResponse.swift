@@ -17,5 +17,11 @@ struct MessageResponse: Content, Equatable {
 }
 
 struct MessagesResponse: Content {
+    struct Metadata: Content {
+        let previousID: Int?
+        let nextID: Int?
+    }
+    
     let messages: [MessageResponse]
+    let metadata: Metadata
 }
