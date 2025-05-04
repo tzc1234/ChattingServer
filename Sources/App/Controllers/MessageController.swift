@@ -35,22 +35,30 @@ actor MessageController {
             throw MessageError.contactNotFound
         }
         
+        let messageID = MessageRepository.MessageID(indexRequest: indexRequest)
         let messages = try await messageRepository.getMessages(
             contactID: contactID,
             userID: userID,
-            messageID: MessageRepository.MessageID(indexRequest: indexRequest),
+            messageID: messageID,
             limit: indexRequest.limit ?? defaultLimit
         )
         
-        let metadata = if let beginID = try messages.first?.requireID(), let endID = try messages.last?.requireID() {
-            try await messageRepository.getMetadata(from: beginID, to: endID, contactID: contactID)
-        } else {
-            MessageRepository.Metadata(previousID: nil, nextID: nil)
+        let metadata: MessageRepository.Metadata? =
+            if let beginID = try messages.first?.requireID(), let endID = try messages.last?.requireID() {
+                try await messageRepository.getMetadata(from: beginID, to: endID, contactID: contactID)
+            } else {
+                nil
+            }
+        
+        let responseMetadata = switch messageID {
+        case .before: MessagesResponse.Metadata(previousID: metadata?.previousID, nextID: nil)
+        case .after: MessagesResponse.Metadata(previousID: nil, nextID: metadata?.nextID)
+        case .none: MessagesResponse.Metadata(previousID: metadata?.previousID, nextID: metadata?.nextID)
         }
         
         return MessagesResponse(
             messages: try messages.map { try $0.toResponse() },
-            metadata: MessagesResponse.Metadata(metadata)
+            metadata: responseMetadata
         )
     }
     
@@ -213,12 +221,5 @@ private extension MessageRepository.MessageID {
         }
         
         return nil
-    }
-}
-
-private extension MessagesResponse.Metadata {
-    init(_ metadata: MessageRepository.Metadata) {
-        self.previousID = metadata.previousID
-        self.nextID = metadata.nextID
     }
 }

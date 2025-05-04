@@ -20,6 +20,11 @@ struct MessagesResponse: Content {
     struct Metadata: Content {
         let previousID: Int?
         let nextID: Int?
+        
+        enum CodingKeys: String, CodingKey {
+            case previousID = "previous_id"
+            case nextID = "next_id"
+        }
     }
     
     let messages: [MessageResponse]
