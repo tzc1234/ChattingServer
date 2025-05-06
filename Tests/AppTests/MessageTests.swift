@@ -60,7 +60,7 @@ struct MessageTests: AppTests {
         }
     }
     
-    @Test("get messages with limit")
+    @Test("last messages must be unread message, message count will differ from limit")
     func getMessagesWithLimit() async throws {
         try await makeApp { app in
             let (currentUser, accessToken) = try await createUserAndAccessToken(app)
@@ -79,7 +79,7 @@ struct MessageTests: AppTests {
             )
             
             let limit = 3
-            let expectedMessageResponses = messageDetails[..<limit].map {
+            let expectedMessageResponses = messageDetails[0...1].map {
                 MessageResponse(
                     id: $0.id,
                     text: $0.text,

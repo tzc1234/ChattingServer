@@ -33,8 +33,8 @@ actor MessageRepository {
                      userID: UserID,
                      messageID: MessageID?,
                      limit: Int) async throws -> [Message] {
-        if messageID == nil,
-           let firstUnreadMessageID = try await firstUnreadMessageID(contactID: contactID, senderIDIsNot: userID) {
+        if messageID == nil, let firstUnreadMessageID =
+            try await firstUnreadMessageID(contactID: contactID, notSenderID: userID) {
             return try await getMessagesWith(
                 firstUnreadMessageID: firstUnreadMessageID,
                 contactID: contactID,
@@ -85,57 +85,23 @@ actor MessageRepository {
     }
     
     private func getMessagesWith(firstUnreadMessageID: Int, contactID: ContactID, limit: Int) async throws -> [Message] {
-        let middle = limit / 2 + 1
-        let sql = SQLQueryString.build {
-            SQLQueryString.withClause {
-                SQLQueryString("""
-                    message_id_count_derived_from_middle AS (
-                        SELECT count(id) AS count FROM (
-                            SELECT id FROM messages
-                            WHERE id >= \(bind: firstUnreadMessageID)
-                            AND contact_id = \(bind: contactID)
-                            LIMIT \(bind: middle)
-                        )
-                    )
-                """)
-                SQLQueryString("""
-                    lower_bound_message_id AS (
-                        SELECT min(id) AS id, count(id) AS count FROM (
-                            SELECT id FROM messages
-                            WHERE id < \(bind: firstUnreadMessageID)
-                            AND contact_id = \(bind: contactID)
-                            ORDER BY id DESC
-                            LIMIT \(bind: limit) - (SELECT count FROM message_id_count_derived_from_middle)
-                        )
-                    )
-                """)
-                SQLQueryString("""
-                    upper_bound_message_id AS (
-                        SELECT max(id) AS id FROM (
-                            SELECT id FROM messages
-                            WHERE id >= \(bind: firstUnreadMessageID)
-                            AND contact_id = \(bind: contactID)
-                            LIMIT \(bind: limit) - (SELECT count FROM lower_bound_message_id)
-                        )
-                    )
-                """)
-            }
-            SQLQueryString("""
+        let sql: SQLQueryString = """
+            SELECT * FROM (
                 SELECT * FROM messages
-                WHERE id BETWEEN ifnull((SELECT id FROM lower_bound_message_id), \(bind: firstUnreadMessageID))
-                AND (SELECT id FROM upper_bound_message_id)
+                WHERE id <= \(bind: firstUnreadMessageID)
                 AND contact_id = \(bind: contactID)
-                ORDER BY id ASC
-            """)
-        }
-        
+                ORDER BY id DESC
+                LIMIT \(bind: limit)
+            )
+            ORDER BY id ASC
+        """
         return try await sqlDatabase()
             .raw(sql)
             .all()
             .map(decodeToMessage)
     }
     
-    private func firstUnreadMessageID(contactID: ContactID, senderIDIsNot userID: UserID) async throws -> Int? {
+    private func firstUnreadMessageID(contactID: ContactID, notSenderID userID: UserID) async throws -> Int? {
         try await Message.query(on: database)
             .filter(\.$contact.$id == contactID)
             .filter(\.$sender.$id != userID)
