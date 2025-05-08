@@ -81,17 +81,18 @@ actor MessageRepository {
                 .orderBy("id", .descending)
         }
         
-        return messageSubquery.limit(limit).query
+        return messageSubquery.limit(limit < 0 ? nil : limit).query
     }
     
     private func getMessagesWith(firstUnreadMessageID: Int, contactID: ContactID, limit: Int) async throws -> [Message] {
+        let limitClause: SQLQueryString = limit < 0 ? "" : "LIMIT \(bind: limit)"
         let sql: SQLQueryString = """
             SELECT * FROM (
                 SELECT * FROM messages
                 WHERE id <= \(bind: firstUnreadMessageID)
                 AND contact_id = \(bind: contactID)
                 ORDER BY id DESC
-                LIMIT \(bind: limit)
+                \(limitClause)
             )
             ORDER BY id ASC
         """
