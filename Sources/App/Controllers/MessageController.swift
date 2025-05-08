@@ -128,17 +128,27 @@ extension MessageController {
                 try await messageRepository.create(message)
                 guard let messageCreatedAt = message.createdAt else { throw MessageError.databaseError }
                 
+                let messageID = try message.requireID()
+                let metadata = try await messageRepository.getMetadata(
+                    from: messageID,
+                    to: messageID,
+                    contactID: contactID
+                )
                 let messageResponse = MessageResponse(
-                    id: try message.requireID(),
+                    id: messageID,
                     text: message.text,
                     senderID: senderID,
                     isRead: message.isRead,
                     createdAt: messageCreatedAt
                 )
+                let webSocketMessageResponse = WebSocketMessageResponse(
+                    message: messageResponse,
+                    metadata: .init(previousID: metadata.previousID)
+                )
                 
                 let encoder = JSONEncoder()
                 encoder.dateEncodingStrategy = .iso8601
-                let data = try encoder.encode(messageResponse)
+                let data = try encoder.encode(webSocketMessageResponse)
                 
                 await send(
                     data: [UInt8](data),
