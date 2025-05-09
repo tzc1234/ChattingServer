@@ -6,6 +6,7 @@ actor MessageRepository {
     enum MessageID {
         case before(Int)
         case after(Int)
+        case betweenExcluded(from: Int, to: Int)
     }
     
     struct Metadata: Decodable {
@@ -76,6 +77,11 @@ actor MessageRepository {
             messageSubquery
                 .where("id", .greaterThan, id)
                 .orderBy("id", .ascending)
+        case let .betweenExcluded(from: fromID, to: toID):
+            messageSubquery
+                .where("id", .greaterThan, fromID)
+                .where("id", .lessThan, toID)
+                .orderBy("id", .descending)
         case .none:
             messageSubquery
                 .orderBy("id", .descending)

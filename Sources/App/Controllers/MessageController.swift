@@ -51,9 +51,12 @@ actor MessageController {
             }
         
         let responseMetadata = switch messageID {
-        case .before: MessagesResponse.Metadata(previousID: metadata?.previousID, nextID: nil)
-        case .after: MessagesResponse.Metadata(previousID: nil, nextID: metadata?.nextID)
-        case .none: MessagesResponse.Metadata(previousID: metadata?.previousID, nextID: metadata?.nextID)
+        case .before:
+            MessagesResponse.Metadata(previousID: metadata?.previousID, nextID: nil)
+        case .after:
+            MessagesResponse.Metadata(previousID: nil, nextID: metadata?.nextID)
+        case .betweenExcluded, .none:
+            MessagesResponse.Metadata(previousID: metadata?.previousID, nextID: metadata?.nextID)
         }
         
         return MessagesResponse(
@@ -220,6 +223,11 @@ extension MessageController {
 
 private extension MessageRepository.MessageID {
     init?(indexRequest: MessagesIndexRequest) {
+        if let afterID = indexRequest.afterMessageID, let beforeID = indexRequest.beforeMessageID {
+            self = .betweenExcluded(from: afterID, to: beforeID)
+            return 
+        }
+        
         if let beforeID = indexRequest.beforeMessageID {
             self = .before(beforeID)
             return
