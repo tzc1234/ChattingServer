@@ -6,6 +6,17 @@ actor MessageRepository {
     enum MessageID {
         case before(Int)
         case after(Int)
+        case betweenExcluded(from: Int, to: Int)
+    }
+    
+    struct Metadata: Decodable {
+        let previousID: Int?
+        let nextID: Int?
+        
+        enum CodingKeys: String, CodingKey {
+            case previousID = "previous_id"
+            case nextID = "next_id"
+        }
     }
     
     private let database: Database
@@ -16,14 +27,15 @@ actor MessageRepository {
     
     enum Error: Swift.Error {
         case databaseConversion
+        case metadataNotFound
     }
     
     func getMessages(contactID: ContactID,
                      userID: UserID,
                      messageID: MessageID?,
                      limit: Int) async throws -> [Message] {
-        if messageID == nil,
-           let firstUnreadMessageID = try await firstUnreadMessageID(contactID: contactID, senderIDIsNot: userID) {
+        if messageID == nil, let firstUnreadMessageID =
+            try await firstUnreadMessageID(contactID: contactID, notSenderID: userID) {
             return try await getMessagesWith(
                 firstUnreadMessageID: firstUnreadMessageID,
                 contactID: contactID,
@@ -65,66 +77,38 @@ actor MessageRepository {
             messageSubquery
                 .where("id", .greaterThan, id)
                 .orderBy("id", .ascending)
+        case let .betweenExcluded(from: fromID, to: toID):
+            messageSubquery
+                .where("id", .greaterThan, fromID)
+                .where("id", .lessThan, toID)
+                .orderBy("id", .descending)
         case .none:
             messageSubquery
                 .orderBy("id", .descending)
         }
         
-        return messageSubquery.limit(limit).query
+        return messageSubquery.limit(limit < 0 ? nil : limit).query
     }
     
     private func getMessagesWith(firstUnreadMessageID: Int, contactID: ContactID, limit: Int) async throws -> [Message] {
-        let middle = limit / 2 + 1
-        let sql = SQLQueryString.build {
-            SQLQueryString.withClause {
-                SQLQueryString("""
-                    message_id_count_derived_from_middle AS (
-                        SELECT count(id) AS count FROM (
-                            SELECT id FROM messages
-                            WHERE id >= \(bind: firstUnreadMessageID)
-                            AND contact_id = \(bind: contactID)
-                            LIMIT \(bind: middle)
-                        )
-                    )
-                """)
-                SQLQueryString("""
-                    lower_bound_message_id AS (
-                        SELECT min(id) AS id, count(id) AS count FROM (
-                            SELECT id FROM messages
-                            WHERE id < \(bind: firstUnreadMessageID)
-                            AND contact_id = \(bind: contactID)
-                            ORDER BY id DESC
-                            LIMIT \(bind: limit) - (SELECT count FROM message_id_count_derived_from_middle)
-                        )
-                    )
-                """)
-                SQLQueryString("""
-                    upper_bound_message_id AS (
-                        SELECT max(id) AS id FROM (
-                            SELECT id FROM messages
-                            WHERE id >= \(bind: firstUnreadMessageID)
-                            AND contact_id = \(bind: contactID)
-                            LIMIT \(bind: limit) - (SELECT count FROM lower_bound_message_id)
-                        )
-                    )
-                """)
-            }
-            SQLQueryString("""
+        let limitClause: SQLQueryString = limit < 0 ? "" : "LIMIT \(bind: limit)"
+        let sql: SQLQueryString = """
+            SELECT * FROM (
                 SELECT * FROM messages
-                WHERE id BETWEEN ifnull((SELECT id FROM lower_bound_message_id), 1)
-                AND (SELECT id FROM upper_bound_message_id)
+                WHERE id <= \(bind: firstUnreadMessageID)
                 AND contact_id = \(bind: contactID)
-                ORDER BY id ASC
-            """)
-        }
-        
+                ORDER BY id DESC
+                \(limitClause)
+            )
+            ORDER BY id ASC
+        """
         return try await sqlDatabase()
             .raw(sql)
             .all()
             .map(decodeToMessage)
     }
     
-    private func firstUnreadMessageID(contactID: ContactID, senderIDIsNot userID: UserID) async throws -> Int? {
+    private func firstUnreadMessageID(contactID: ContactID, notSenderID userID: UserID) async throws -> Int? {
         try await Message.query(on: database)
             .filter(\.$contact.$id == contactID)
             .filter(\.$sender.$id != userID)
@@ -135,6 +119,31 @@ actor MessageRepository {
     
     private func decodeToMessage(_ row: SQLRow) throws -> Message {
         try row.decode(fluentModel: Message.self)
+    }
+    
+    func getMetadata(from beginMessageID: Int, to endMessageID: Int, contactID: Int) async throws -> Metadata {
+        let sql: SQLQueryString = """
+            SELECT m1.previous_id, m2.next_id FROM (
+                SELECT max(id) AS previous_id, ifnull(contact_id, \(bind: contactID)) AS contact_id FROM messages
+                WHERE id < \(bind: beginMessageID)
+                AND contact_id = \(bind: contactID)
+            ) AS m1
+            JOIN (
+                SELECT min(id) AS next_id, ifnull(contact_id, \(bind: contactID)) AS contact_id FROM messages
+                WHERE id > \(bind: endMessageID)
+                AND contact_id = \(bind: contactID)
+            ) AS m2
+            ON m1.contact_id = m2.contact_id
+        """
+        
+        guard let metadata = try await sqlDatabase()
+            .raw(sql)
+            .first()?
+            .decode(model: Metadata.self) else {
+            throw Error.metadataNotFound
+        }
+        
+        return metadata
     }
     
     private func sqlDatabase() throws(Error) -> SQLDatabase {

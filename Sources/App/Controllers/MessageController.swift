@@ -35,13 +35,34 @@ actor MessageController {
             throw MessageError.contactNotFound
         }
         
+        let messageID = MessageRepository.MessageID(indexRequest: indexRequest)
         let messages = try await messageRepository.getMessages(
             contactID: contactID,
             userID: userID,
-            messageID: MessageRepository.MessageID(indexRequest: indexRequest),
+            messageID: messageID,
             limit: indexRequest.limit ?? defaultLimit
         )
-        return MessagesResponse(messages: try messages.map { try $0.toResponse() })
+        
+        let metadata: MessageRepository.Metadata? =
+            if let beginID = try messages.first?.requireID(), let endID = try messages.last?.requireID() {
+                try await messageRepository.getMetadata(from: beginID, to: endID, contactID: contactID)
+            } else {
+                nil
+            }
+        
+        let responseMetadata = switch messageID {
+        case .before:
+            MessagesResponse.Metadata(previousID: metadata?.previousID, nextID: nil)
+        case .after:
+            MessagesResponse.Metadata(previousID: nil, nextID: metadata?.nextID)
+        case .betweenExcluded, .none:
+            MessagesResponse.Metadata(previousID: metadata?.previousID, nextID: metadata?.nextID)
+        }
+        
+        return MessagesResponse(
+            messages: try messages.map { try $0.toResponse() },
+            metadata: responseMetadata
+        )
     }
     
     @Sendable
@@ -110,17 +131,27 @@ extension MessageController {
                 try await messageRepository.create(message)
                 guard let messageCreatedAt = message.createdAt else { throw MessageError.databaseError }
                 
+                let messageID = try message.requireID()
+                let metadata = try await messageRepository.getMetadata(
+                    from: messageID,
+                    to: messageID,
+                    contactID: contactID
+                )
                 let messageResponse = MessageResponse(
-                    id: try message.requireID(),
+                    id: messageID,
                     text: message.text,
                     senderID: senderID,
                     isRead: message.isRead,
                     createdAt: messageCreatedAt
                 )
+                let webSocketMessageResponse = WebSocketMessageResponse(
+                    message: messageResponse,
+                    metadata: .init(previousID: metadata.previousID)
+                )
                 
                 let encoder = JSONEncoder()
                 encoder.dateEncodingStrategy = .iso8601
-                let data = try encoder.encode(messageResponse)
+                let data = try encoder.encode(webSocketMessageResponse)
                 
                 await send(
                     data: [UInt8](data),
@@ -192,6 +223,11 @@ extension MessageController {
 
 private extension MessageRepository.MessageID {
     init?(indexRequest: MessagesIndexRequest) {
+        if let afterID = indexRequest.afterMessageID, let beforeID = indexRequest.beforeMessageID {
+            self = .betweenExcluded(from: afterID, to: beforeID)
+            return 
+        }
+        
         if let beforeID = indexRequest.beforeMessageID {
             self = .before(beforeID)
             return
