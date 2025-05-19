@@ -565,6 +565,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             responder: anotherUser.toResponse(app: app, directoryPath: testAvatarDirectoryPath),
             blockedByUserID: nil,
             unreadMessageCount: repository.unreadMessagesCountFor(contact, senderIsNot: user.requireID()),
+            createdAt: contact.createdAt!,
             lastUpdate: repository.lastUpdateFor(contact)!,
             lastMessage: repository.lastMessageFor(contact, senderIsNot: user.requireID())?.toResponse()
         )
