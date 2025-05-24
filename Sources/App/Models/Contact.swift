@@ -35,9 +35,21 @@ final class Contact: Model, @unchecked Sendable {
 extension Contact {
     func toResponse(currentUserID: Int,
                     contactRepository: ContactRepository,
+                    lastMessage: MessageResponseWithMetadata? = nil,
                     avatarLink: (String?) async -> String?) async throws -> ContactResponse {
         guard let createdAt, let lastUpdate = try await contactRepository.lastUpdateFor(self) else {
             throw ContactError.databaseError
+        }
+        
+        let lastMessage: MessageResponseWithMetadata? = if let lastMessage {
+            lastMessage
+        } else if let tuple = try await contactRepository.lastMessageFor(self, senderIsNot: currentUserID) {
+            MessageResponseWithMetadata(
+                message: try tuple.message.toResponse(),
+                metadata: .init(previousID: tuple.previousMessageID)
+            )
+        } else {
+            nil
         }
         
         return try await ContactResponse(
@@ -47,7 +59,7 @@ extension Contact {
             unreadMessageCount: contactRepository.unreadMessagesCountFor(self, senderIsNot: currentUserID),
             createdAt: createdAt,
             lastUpdate: lastUpdate,
-            lastMessage: contactRepository.lastMessageFor(self, senderIsNot: currentUserID)?.toResponse()
+            lastMessage: lastMessage
         )
     }
 }

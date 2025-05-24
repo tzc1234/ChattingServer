@@ -322,7 +322,7 @@ struct MessageTests: AppTests {
             
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
-            let decoded = try decoder.decode(WebSocketMessageResponse.self, from: data)
+            let decoded = try decoder.decode(MessageResponseWithMetadata.self, from: data)
             #expect(decoded.message.text == messageText)
         }
     }

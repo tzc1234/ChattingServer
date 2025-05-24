@@ -144,14 +144,14 @@ extension MessageController {
                     isRead: message.isRead,
                     createdAt: messageCreatedAt
                 )
-                let webSocketMessageResponse = WebSocketMessageResponse(
+                let messageResponseWithMetadata = MessageResponseWithMetadata(
                     message: messageResponse,
                     metadata: .init(previousID: metadata.previousID)
                 )
                 
                 let encoder = JSONEncoder()
                 encoder.dateEncodingStrategy = .iso8601
-                let data = try encoder.encode(webSocketMessageResponse)
+                let data = try encoder.encode(messageResponseWithMetadata)
                 
                 await send(
                     data: [UInt8](data),
@@ -160,11 +160,11 @@ extension MessageController {
                     retry: Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES
                 )
                 
-                try await sendMessageNotification(
+                try await sendMessagePushNotification(
                     contactID: contactID,
                     senderID: senderID,
                     db: req.db,
-                    messageText: message.text
+                    messageResponse: messageResponseWithMetadata
                 )
             } catch {
                 req.logger.error(Logger.Message(stringLiteral: error.localizedDescription))
@@ -192,10 +192,10 @@ extension MessageController {
         await webSocketStore.remove(for: contactID, userID: userID)
     }
     
-    private func sendMessageNotification(contactID: ContactID,
-                                         senderID: UserID,
-                                         db: Database,
-                                         messageText: String) async throws {
+    private func sendMessagePushNotification(contactID: ContactID,
+                                             senderID: UserID,
+                                             db: Database,
+                                             messageResponse: MessageResponseWithMetadata) async throws {
         guard let contact = try await contactRepository.findBy(id: contactID, userID: senderID) else { return }
         
         let receiver = try await contactRepository.anotherUser(contact, for: senderID)
@@ -207,15 +207,18 @@ extension MessageController {
         await apnsHandler.sendMessageNotification(
             deviceToken: receiverDeviceToken,
             forUserID: receiverID,
-            contact: try contactResponse(contact, for: receiverID),
-            messageText: messageText
+            contact: try contactResponse(contact, for: receiverID, with: messageResponse),
+            messageText: messageResponse.message.text
         )
     }
     
-    private func contactResponse(_ contact: Contact, for userID: Int) async throws -> ContactResponse {
+    private func contactResponse(_ contact: Contact,
+                                 for userID: Int,
+                                 with messageResponse: MessageResponseWithMetadata) async throws -> ContactResponse {
         try await contact.toResponse(
             currentUserID: userID,
             contactRepository: contactRepository,
+            lastMessage: messageResponse,
             avatarLink: avatarLinkLoader.avatarLink()
         )
     }

@@ -7,7 +7,7 @@ struct ContactResponse: Content {
     let unreadMessageCount: Int
     let createdAt: Date
     let lastUpdate: Date
-    let lastMessage: MessageResponse?
+    let lastMessage: MessageResponseWithMetadata?
     
     enum CodingKeys: String, CodingKey {
         case id

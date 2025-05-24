@@ -91,14 +91,32 @@ actor ContactRepository {
             .count()
     }
     
-    func lastMessageFor(_ contact: Contact, senderIsNot userID: Int) async throws -> Message? {
-        if let firstUnreadMessage = try await firstUnreadMessage(contact, senderIsNot: userID) {
-            return firstUnreadMessage
+    func lastMessageFor(_ contact: Contact,
+                        senderIsNot userID: Int) async throws -> (message: Message, previousMessageID: Int?)? {
+        let contactID = try contact.requireID()
+        let message = if let firstUnreadMessage = try await firstUnreadMessage(contact, senderIsNot: userID) {
+            firstUnreadMessage
+        } else {
+            try await contact.$messages.query(on: database).sort(\.$createdAt, .descending).first()
         }
         
-        return try await contact.$messages.query(on: database)
-            .sort(\.$createdAt, .descending)
-            .first()
+        guard let message else { return nil }
+        
+        let previousMessageID = try await previousMessageID(messageID: message.requireID(), contactID: contactID)
+        return (message, previousMessageID)
+    }
+    
+    private func previousMessageID(messageID: Int, contactID: Int) async throws -> Int? {
+        let sql: SQLQueryString = """
+            SELECT max(id) AS previous_id FROM messages
+            WHERE id < \(bind: messageID)
+            AND contact_id = \(bind: contactID)
+        """
+        
+        return try await sqlDatabase()
+            .raw(sql)
+            .first()?
+            .decode(column: "previous_id", as: Int?.self)
     }
     
     private func firstUnreadMessage(_ contact: Contact, senderIsNot userID: Int) async throws -> Message? {

@@ -487,18 +487,20 @@ struct ContactTests: AppTests, AvatarFileHelpers {
         assert(contact.lastMessage, asExpected: expected.lastMessage, sourceLocation: sourceLocation)
     }
     
-    private func assert(_ message: MessageResponse?,
-                        asExpected expected: MessageResponse?,
+    private func assert(_ messageWithMeta: MessageResponseWithMetadata?,
+                        asExpected expectedWithMeta: MessageResponseWithMetadata?,
                         sourceLocation: SourceLocation = #_sourceLocation) {
-        if message == nil && expected == nil { return }
-        guard let message, let expected else {
+        if messageWithMeta == nil && expectedWithMeta == nil { return }
+        guard let messageWithMeta, let expectedWithMeta else {
             Issue.record(
-                "Expected message: \(String(describing: expected)), got \(String(describing: message)) instead",
+                "Expected message: \(String(describing: expectedWithMeta)), got \(String(describing: messageWithMeta)) instead",
                 sourceLocation: sourceLocation
             )
             return
         }
         
+        let message = messageWithMeta.message
+        let expected = expectedWithMeta.message
         #expect(message.id == expected.id, sourceLocation: sourceLocation)
         #expect(message.text == expected.text, sourceLocation: sourceLocation)
         #expect(message.senderID == expected.senderID, sourceLocation: sourceLocation)
@@ -507,6 +509,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             message.createdAt == expected.createdAt.removeTimeIntervalDecimal(),
             sourceLocation: sourceLocation
         )
+        #expect(messageWithMeta.metadata == expectedWithMeta.metadata)
     }
     
     private func expect(contact: ContactResponse,
@@ -560,6 +563,16 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             db: app.db
         )
         
+        let lastMessage: MessageResponseWithMetadata? = if let tuple = try await repository
+            .lastMessageFor(contact, senderIsNot: user.requireID()) {
+            MessageResponseWithMetadata(
+                message: try tuple.message.toResponse(),
+                metadata: .init(previousID: tuple.previousMessageID)
+            )
+        } else {
+            nil
+        }
+        
         return try await ContactResponse(
             id: contact.requireID(),
             responder: anotherUser.toResponse(app: app, directoryPath: testAvatarDirectoryPath),
@@ -567,7 +580,7 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             unreadMessageCount: repository.unreadMessagesCountFor(contact, senderIsNot: user.requireID()),
             createdAt: contact.createdAt!,
             lastUpdate: repository.lastUpdateFor(contact)!,
-            lastMessage: repository.lastMessageFor(contact, senderIsNot: user.requireID())?.toResponse()
+            lastMessage: lastMessage
         )
     }
     
