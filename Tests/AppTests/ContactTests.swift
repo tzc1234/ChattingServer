@@ -563,16 +563,6 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             db: app.db
         )
         
-        let lastMessage: MessageResponseWithMetadata? = if let tuple = try await repository
-            .lastMessageFor(contact, senderIsNot: user.requireID()) {
-            MessageResponseWithMetadata(
-                message: try tuple.message.toResponse(),
-                metadata: .init(previousID: tuple.previousMessageID)
-            )
-        } else {
-            nil
-        }
-        
         return try await ContactResponse(
             id: contact.requireID(),
             responder: anotherUser.toResponse(app: app, directoryPath: testAvatarDirectoryPath),
@@ -580,7 +570,8 @@ struct ContactTests: AppTests, AvatarFileHelpers {
             unreadMessageCount: repository.unreadMessagesCountFor(contact, senderIsNot: user.requireID()),
             createdAt: contact.createdAt!,
             lastUpdate: repository.lastUpdateFor(contact)!,
-            lastMessage: lastMessage
+            lastMessage: repository.lastMessageFor(contact, senderIsNot: user.requireID())?
+                .toMessageResponseWithMetadata()
         )
     }
     

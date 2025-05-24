@@ -41,15 +41,14 @@ extension Contact {
             throw ContactError.databaseError
         }
         
-        let lastMessage: MessageResponseWithMetadata? = if let lastMessage {
+        let lastMessage = if let lastMessage {
             lastMessage
-        } else if let tuple = try await contactRepository.lastMessageFor(self, senderIsNot: currentUserID) {
-            MessageResponseWithMetadata(
-                message: try tuple.message.toResponse(),
-                metadata: .init(previousID: tuple.previousMessageID)
-            )
+        } else if let lastMessage = try await contactRepository
+            .lastMessageFor(self, senderIsNot: currentUserID)?
+            .toMessageResponseWithMetadata() {
+            lastMessage
         } else {
-            nil
+            MessageResponseWithMetadata?.none
         }
         
         return try await ContactResponse(
@@ -61,5 +60,11 @@ extension Contact {
             lastUpdate: lastUpdate,
             lastMessage: lastMessage
         )
+    }
+}
+
+extension ContactRepository.MessageAndPreviousID {
+    func toMessageResponseWithMetadata() throws -> MessageResponseWithMetadata {
+        MessageResponseWithMetadata(message: try message.toResponse(), metadata: .init(previousID: previousMessageID))
     }
 }

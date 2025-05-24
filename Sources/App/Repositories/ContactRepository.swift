@@ -91,8 +91,13 @@ actor ContactRepository {
             .count()
     }
     
+    struct MessageAndPreviousID {
+        let message: Message
+        let previousMessageID: Int?
+    }
+    
     func lastMessageFor(_ contact: Contact,
-                        senderIsNot userID: Int) async throws -> (message: Message, previousMessageID: Int?)? {
+                        senderIsNot userID: Int) async throws -> MessageAndPreviousID? {
         let contactID = try contact.requireID()
         let message = if let firstUnreadMessage = try await firstUnreadMessage(contact, senderIsNot: userID) {
             firstUnreadMessage
@@ -102,8 +107,8 @@ actor ContactRepository {
         
         guard let message else { return nil }
         
-        let previousMessageID = try await previousMessageID(messageID: message.requireID(), contactID: contactID)
-        return (message, previousMessageID)
+        let previousID = try await previousMessageID(messageID: message.requireID(), contactID: contactID)
+        return .init(message: message, previousMessageID: previousID)
     }
     
     private func previousMessageID(messageID: Int, contactID: Int) async throws -> Int? {
