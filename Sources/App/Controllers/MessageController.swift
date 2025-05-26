@@ -50,18 +50,9 @@ actor MessageController {
                 nil
             }
         
-        let responseMetadata = switch messageID {
-        case .before:
-            MessagesResponse.Metadata(previousID: metadata?.previousID, nextID: nil)
-        case .after:
-            MessagesResponse.Metadata(previousID: nil, nextID: metadata?.nextID)
-        case .betweenExcluded, .none:
-            MessagesResponse.Metadata(previousID: metadata?.previousID, nextID: metadata?.nextID)
-        }
-        
         return MessagesResponse(
             messages: try messages.map { try $0.toResponse() },
-            metadata: responseMetadata
+            metadata: .init(previousID: metadata?.previousID, nextID: metadata?.nextID)
         )
     }
     
