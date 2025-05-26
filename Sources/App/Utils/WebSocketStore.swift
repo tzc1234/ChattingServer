@@ -13,6 +13,12 @@ actor WebSocketStore {
         return contactWebSockets.map(\.value)
     }
     
+    func get(for contactID: ContactID, userID: UserID) -> WebSocket? {
+        guard let webSockets = store[contactID] else { return nil }
+        
+        return webSockets[userID]
+    }
+    
     func remove(for contactID: ContactID, userID: UserID) {
         store[contactID]?[userID] = nil
     }

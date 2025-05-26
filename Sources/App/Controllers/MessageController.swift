@@ -95,11 +95,29 @@ extension MessageController: RouteCollection {
         
         let protectedWebSocket = protected
             .grouped(MessageChannelContactValidationMiddleware(contactRepository: contactRepository))
-        protectedWebSocket.webSocket("channel", onUpgrade: messagesChannel)
+        protectedWebSocket.webSocket("channel", shouldUpgrade: upgradeToMessagesChannel, onUpgrade: messagesChannel)
     }
 }
 
 extension MessageController {
+    @Sendable
+    private func upgradeToMessagesChannel(req: Request) async throws -> HTTPHeaders? {
+        let userID = try req.auth.require(Payload.self).userID
+        let contactID = try ValidatedContactID(req.parameters).value
+        guard (try? await contactRepository.findBy(id: contactID, userID: userID)) != nil else {
+            throw ContactError.contactNotFound
+        }
+        
+        // User is already connected on other devices.
+        if let previousConnectedWS = await webSocketStore.get(for: contactID, userID: userID) {
+            // Close and remove the previous one.
+            try? await previousConnectedWS.close(code: .goingAway)
+            await webSocketStore.remove(for: contactID, userID: userID)
+        }
+        
+        return [:]
+    }
+    
     @Sendable
     private func messagesChannel(req: Request, ws: WebSocket) async {
         guard let contactID = try? ValidatedContactID(req.parameters).value,
@@ -108,10 +126,17 @@ extension MessageController {
             return
         }
         
+        let webSocketID = ObjectIdentifier(ws)
         await webSocketStore.add(ws, for: contactID, userID: senderID)
         
         ws.onClose.whenComplete { [weak webSocketStore] _ in
-            Task { await webSocketStore?.remove(for: contactID, userID: senderID) }
+            Task {
+                if let webSocketStore,
+                   let storedWebSocket = await webSocketStore.get(for: contactID, userID: senderID),
+                   ObjectIdentifier(storedWebSocket) == webSocketID {
+                    await webSocketStore.remove(for: contactID, userID: senderID)
+                }
+            }
         }
         
         ws.onText { [weak self] ws, text in
