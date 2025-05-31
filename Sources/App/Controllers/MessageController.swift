@@ -62,7 +62,7 @@ actor MessageController {
         let contactID = try ValidatedContactID(req.parameters).value
         let untilMessageID = try req.content.decode(ReadMessageRequest.self).untilMessageID
         
-        guard try await contactRepository.isContactExited(id: contactID, withUserID: userID) else {
+        guard let contact = try await contactRepository.findBy(id: contactID, userID: userID) else {
             throw MessageError.contactNotFound
         }
         
@@ -71,6 +71,16 @@ actor MessageController {
             userID: userID,
             untilMessageID: untilMessageID
         )
+        
+        let sender = try await contactRepository.anotherUser(contact, for: userID)
+        if let deviceToken = sender.deviceToken, let forUserID = sender.id {
+            await apnsHandler.sendReadMessagesNotification(
+                deviceToken: deviceToken,
+                forUserID: forUserID,
+                contactID: contactID,
+                untilMessageID: untilMessageID
+            )
+        }
         
         return Response()
     }
