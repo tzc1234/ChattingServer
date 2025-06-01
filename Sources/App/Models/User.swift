@@ -48,6 +48,14 @@ final class User: Model, @unchecked Sendable {
 
 extension User {
     func toResponse(avatarLink: (String?) async -> String?) async throws -> UserResponse {
-        UserResponse(id: try requireID(), name: name, email: email, avatarURL: await avatarLink(avatarFilename))
+        guard let createdAt else { throw AuthenticationError.databaseError }
+        
+        return UserResponse(
+            id: try requireID(),
+            name: name,
+            email: email,
+            avatarURL: await avatarLink(avatarFilename),
+            createdAt: createdAt
+        )
     }
 }

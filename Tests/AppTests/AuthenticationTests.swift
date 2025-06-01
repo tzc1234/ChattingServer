@@ -135,7 +135,7 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
             }, afterResponse: { res async throws in
                 #expect(res.status == .ok)
                 let newToken = try res.content.decode(TokenResponse.self)
-                #expect(newToken.user == oldToken.user)
+                assertUser(newToken.user, as: oldToken.user)
                 #expect(newToken.accessToken != oldToken.accessToken, "Expect a new access token")
                 #expect(newToken.refreshToken != oldToken.refreshToken, "Expect a new refresh token")
             })
@@ -391,6 +391,19 @@ struct AuthenticationTests: AppTests, AvatarFileHelpers {
     private func setDeviceToken(_ deviceToken: String, into user: User, on db: Database) async throws {
         user.deviceToken = deviceToken
         try await user.update(on: db)
+    }
+    
+    private func assertUser(_ user: UserResponse,
+                            as expectedUser: UserResponse,
+                            sourceLocation: SourceLocation = #_sourceLocation) {
+        #expect(user.id == expectedUser.id, sourceLocation: sourceLocation)
+        #expect(user.name == expectedUser.name, sourceLocation: sourceLocation)
+        #expect(user.email == expectedUser.email, sourceLocation: sourceLocation)
+        #expect(user.avatarURL == expectedUser.avatarURL, sourceLocation: sourceLocation)
+        #expect(
+            user.createdAt.removeTimeIntervalDecimal() == expectedUser.createdAt.removeTimeIntervalDecimal(),
+            sourceLocation: sourceLocation
+        )
     }
 }
 
