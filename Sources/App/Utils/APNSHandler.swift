@@ -21,6 +21,7 @@ struct APNSConfiguration {
 protocol APNSHandler: Sendable {
     func sendNewContactAddedNotification(deviceToken: String, forUserID: Int, contact: ContactResponse) async
     func sendMessageNotification(deviceToken: String, forUserID: Int, contact: ContactResponse, messageText: String) async
+    func sendReadMessagesNotification(deviceToken: String, forUserID: Int, contactID: Int, untilMessageID: Int) async
 }
 
 actor DefaultAPNSHandler: APNSHandler {
@@ -71,7 +72,7 @@ actor DefaultAPNSHandler: APNSHandler {
             payload: Payload(action: "new_contact_added", for_user_id: forUserID, contact: contact),
             mutableContent: 1
         )
-        await send(alert, with: deviceToken)
+        await sendAlert(alert, with: deviceToken)
     }
     
     func sendMessageNotification(deviceToken: String,
@@ -90,12 +91,42 @@ actor DefaultAPNSHandler: APNSHandler {
             threadID: "message-\(contact.id)",
             mutableContent: 1
         )
-        await send(alert, with: deviceToken)
+        await sendAlert(alert, with: deviceToken)
     }
     
-    private func send<Payload>(_ alert: APNSAlertNotification<Payload>, with deviceToken: String) async {
+    private func sendAlert<Payload>(_ alert: APNSAlertNotification<Payload>, with deviceToken: String) async {
         do {
             try await app.apns.client.sendAlertNotification(alert, deviceToken: deviceToken)
+        } catch {
+            app.logger.error(Logger.Message(stringLiteral: error.localizedDescription))
+        }
+    }
+}
+
+extension DefaultAPNSHandler {
+    private struct ReadMessagesPayload: Codable {
+        let action: String
+        let for_user_id: Int
+        let contact_id: Int
+        let until_message_id: Int
+        let timestamp: Date
+    }
+    
+    func sendReadMessagesNotification(deviceToken: String, forUserID: Int, contactID: Int, untilMessageID: Int) async {
+        let notification = APNSBackgroundNotification(
+            expiration: .immediately,
+            topic: configuration.bundleID,
+            payload: ReadMessagesPayload(
+                action: "read_messages",
+                for_user_id: forUserID,
+                contact_id: contactID,
+                until_message_id: untilMessageID,
+                timestamp: .now
+            )
+        )
+        
+        do {
+            try await app.apns.client.sendBackgroundNotification(notification, deviceToken: deviceToken)
         } catch {
             app.logger.error(Logger.Message(stringLiteral: error.localizedDescription))
         }

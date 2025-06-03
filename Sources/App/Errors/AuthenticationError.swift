@@ -4,6 +4,7 @@ enum AuthenticationError: AbortError, DebuggableError {
     case userNotFound
     case accessTokenInvalid
     case refreshTokenInvalid
+    case databaseError
     
     var status: HTTPResponseStatus {
         switch self {
@@ -13,6 +14,8 @@ enum AuthenticationError: AbortError, DebuggableError {
             .unauthorized
         case .refreshTokenInvalid:
             .unauthorized
+        case .databaseError:
+            .internalServerError
         }
     }
     
@@ -24,6 +27,8 @@ enum AuthenticationError: AbortError, DebuggableError {
             "Access token invalid"
         case .refreshTokenInvalid:
             "Refresh token invalid"
+        case .databaseError:
+            "Database error"
         }
     }
     
@@ -35,6 +40,8 @@ enum AuthenticationError: AbortError, DebuggableError {
             "access_token_invalid"
         case .refreshTokenInvalid:
             "refresh_token_invalid"
+        case .databaseError:
+            "database_error"
         }
     }
 }

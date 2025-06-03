@@ -36,4 +36,5 @@ extension AppTests {
 actor DummyAPNSHandler: APNSHandler {
     func sendNewContactAddedNotification(deviceToken: String, forUserID: Int, contact: ContactResponse) async {}
     func sendMessageNotification(deviceToken: String, forUserID: Int, contact: ContactResponse, messageText: String) async {}
+    func sendReadMessagesNotification(deviceToken: String, forUserID: Int, contactID: Int, untilMessageID: Int) async {}
 }

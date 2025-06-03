@@ -62,7 +62,7 @@ actor MessageController {
         let contactID = try ValidatedContactID(req.parameters).value
         let untilMessageID = try req.content.decode(ReadMessageRequest.self).untilMessageID
         
-        guard try await contactRepository.isContactExited(id: contactID, withUserID: userID) else {
+        guard let contact = try await contactRepository.findBy(id: contactID, userID: userID) else {
             throw MessageError.contactNotFound
         }
         
@@ -71,6 +71,31 @@ actor MessageController {
             userID: userID,
             untilMessageID: untilMessageID
         )
+        
+        let sender = try await contactRepository.anotherUser(contact, for: userID)
+        if let webSocket = try await webSocketStore.get(for: contactID, userID: sender.requireID()) {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(UpdatedReadMessagesResponse(
+                contactID: contactID,
+                untilMessageID: untilMessageID,
+                timestamp: .now
+            ))
+            
+            await send(
+                data: [UInt8](data),
+                by: webSocket,
+                logger: req.logger,
+                retry: Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES
+            )
+        } else if let deviceToken = sender.deviceToken, let forUserID = sender.id {
+            await apnsHandler.sendReadMessagesNotification(
+                deviceToken: deviceToken,
+                forUserID: forUserID,
+                contactID: contactID,
+                untilMessageID: untilMessageID
+            )
+        }
         
         return Response()
     }
@@ -190,15 +215,19 @@ extension MessageController {
     
     private func send(data: [UInt8], for contactID: ContactID, logger: Logger, retry: UInt) async {
         for webSocket in await webSocketStore.get(for: contactID) {
-            do {
-                try await webSocket.send(data)
-            } catch {
-                logger.error(Logger.Message(stringLiteral: error.localizedDescription))
-                
-                if retry > 0 {
-                    logger.info(Logger.Message(stringLiteral: "Retry webSocket send..."))
-                    await send(data: data, for: contactID, logger: logger, retry: retry - 1)
-                }
+            await send(data: data, by: webSocket, logger: logger, retry: retry)
+        }
+    }
+    
+    private func send(data: [UInt8], by webSocket: WebSocket, logger: Logger, retry: UInt) async {
+        do {
+            try await webSocket.send(data)
+        } catch {
+            logger.error(Logger.Message(stringLiteral: error.localizedDescription))
+            
+            if retry > 0 {
+                logger.info(Logger.Message(stringLiteral: "Retry webSocket send..."))
+                await send(data: data, by: webSocket, logger: logger, retry: retry - 1)
             }
         }
     }
