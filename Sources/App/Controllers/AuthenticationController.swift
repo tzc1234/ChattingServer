@@ -121,6 +121,43 @@ struct AuthenticationController {
     }
     
     @Sendable
+    private func updateCurrentUser(req: Request) async throws -> UserResponse {
+        try UpdateUserRequest.validate(content: req)
+        let request = try req.content.decode(UpdateUserRequest.self)
+        let userID = try req.auth.require(Payload.self).userID
+        guard let user = try await userRepository.findBy(id: userID) else {
+            throw AuthenticationError.userNotFound
+        }
+        
+        user.name = request.name
+        if let avatar = request.avatar {
+            do {
+                let oldAvatarFilename = user.avatarFilename
+                
+                // Save the new avatar here.
+                let newAvatarFilename = try await avatarFileSaver.save(avatar)
+                user.avatarFilename = newAvatarFilename
+                
+                // Make sure user update success before delete the old avatar.
+                try await user.update(on: req.db)
+                if let oldAvatarFilename {
+                    try await avatarFileSaver.delete(oldAvatarFilename)
+                }
+            } catch let error as AvatarFileSaver.Error {
+                throw Abort(.unsupportedMediaType, reason: error.reason)
+            } catch {
+                throw error
+            }
+        }
+        
+        return try await user.toResponse { [weak avatarLinkLoader] filename in
+            guard let filename else { return nil }
+            
+            return await avatarLinkLoader?.get(filename: filename)
+        }
+    }
+    
+    @Sendable
     private func updateDeviceToken(req: Request) async throws -> Response {
         try UpdateDeviceTokenRequest.validate(content: req)
         let deviceToken = try req.content.decode(UpdateDeviceTokenRequest.self).deviceToken
@@ -148,6 +185,7 @@ extension AuthenticationController: RouteCollection {
         routes.grouped("me")
             .group(AccessTokenGuardMiddleware(), UserAuthenticator()) { route in
                 route.get(use: getCurrentUser)
+                route.on(.PUT, body: .collect(maxSize: Constants.REGISTER_PAYLOAD_MAX_SIZE), use: updateCurrentUser)
                 route.post("deviceToken", use: updateDeviceToken)
             }
     }
