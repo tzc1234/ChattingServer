@@ -9,7 +9,7 @@ import Foundation
 
 enum IncomingBinaryType: UInt8 {
     case message = 0
-    case readMessage = 1
+    case readMessages = 1
 }
 
 struct IncomingBinary {

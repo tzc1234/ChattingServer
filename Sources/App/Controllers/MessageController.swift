@@ -144,7 +144,7 @@ extension MessageController {
                         logger: req.logger,
                         db: req.db
                     )
-                case .readMessage:
+                case .readMessages:
                     guard let incomingReadMessage = try? JSONDecoder()
                         .decode(IncomingReadMessage.self, from: incomingBinary.payload) else {
                         try? await close(ws, for: contactID, with: userID)
