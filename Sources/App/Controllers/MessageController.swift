@@ -159,57 +159,77 @@ extension MessageController {
             try? await self?.close(ws, for: contactID, with: senderID)
         }
         
-        ws.onBinary { [weak self] ws, data in
+        ws.onBinary { [weak self] ws, buffer in
             guard let self else { return }
             
-            guard let incoming = try? JSONDecoder().decode(IncomingMessage.self, from: data) else {
+            let data = Data(buffer: buffer)
+            guard let incomingBinary = IncomingBinary.convert(from: data) else {
                 try? await close(ws, for: contactID, with: senderID)
                 return
             }
             
-            do {
-                let message = Message(contactID: contactID, senderID: senderID, text: incoming.text)
-                try await messageRepository.create(message)
-                guard let messageCreatedAt = message.createdAt else { throw MessageError.databaseError }
+            switch incomingBinary.type {
+            case .message:
+                guard let incomingMessage = try? JSONDecoder()
+                    .decode(IncomingMessage.self, from: incomingBinary.payload) else {
+                    try? await close(ws, for: contactID, with: senderID)
+                    return
+                }
                 
-                let messageID = try message.requireID()
-                let metadata = try await messageRepository.getMetadata(
-                    from: messageID,
-                    to: messageID,
-                    contactID: contactID
-                )
-                let messageResponse = MessageResponse(
-                    id: messageID,
-                    text: message.text,
-                    senderID: senderID,
-                    isRead: message.isRead,
-                    createdAt: messageCreatedAt
-                )
-                let messageResponseWithMetadata = MessageResponseWithMetadata(
-                    message: messageResponse,
-                    metadata: .init(previousID: metadata.previousID)
-                )
-                
-                let encoder = JSONEncoder()
-                encoder.dateEncodingStrategy = .iso8601
-                let data = try encoder.encode(messageResponseWithMetadata)
-                
-                await send(
-                    data: [UInt8](data),
-                    for: contactID,
-                    logger: req.logger,
-                    retry: Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES
-                )
-                
-                try await sendMessagePushNotification(
-                    contactID: contactID,
-                    senderID: senderID,
-                    db: req.db,
-                    messageResponse: messageResponseWithMetadata
-                )
-            } catch {
-                req.logger.error(Logger.Message(stringLiteral: error.localizedDescription))
+                await handle(incomingMessage, contactID: contactID, senderID: senderID, logger: req.logger, db: req.db)
+            case .readMessage:
+                break
             }
+        }
+    }
+    
+    private func handle(_ incomingMessage: IncomingMessage,
+                        contactID: Int,
+                        senderID: Int,
+                        logger: Logger,
+                        db: Database) async {
+        do {
+            let message = Message(contactID: contactID, senderID: senderID, text: incomingMessage.text)
+            try await messageRepository.create(message)
+            guard let messageCreatedAt = message.createdAt else { throw MessageError.databaseError }
+            
+            let messageID = try message.requireID()
+            let metadata = try await messageRepository.getMetadata(
+                from: messageID,
+                to: messageID,
+                contactID: contactID
+            )
+            let messageResponse = MessageResponse(
+                id: messageID,
+                text: message.text,
+                senderID: senderID,
+                isRead: message.isRead,
+                createdAt: messageCreatedAt
+            )
+            let messageResponseWithMetadata = MessageResponseWithMetadata(
+                message: messageResponse,
+                metadata: .init(previousID: metadata.previousID)
+            )
+            
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(messageResponseWithMetadata)
+            
+            await send(
+                data: [UInt8](data),
+                for: contactID,
+                logger: logger,
+                retry: Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES
+            )
+            
+            try await sendMessagePushNotification(
+                contactID: contactID,
+                senderID: senderID,
+                db: db,
+                messageResponse: messageResponseWithMetadata
+            )
+        } catch {
+            logger.error(Logger.Message(stringLiteral: error.localizedDescription))
         }
     }
     

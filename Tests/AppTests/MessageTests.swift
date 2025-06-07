@@ -305,12 +305,13 @@ struct MessageTests: AppTests {
             header.bearerAuthorization = BearerAuthorization(token: accessToken)
             
             let messageText = "Hello, world!"
-            let encoded = try JSONEncoder().encode(IncomingMessage(text: messageText))
+            let encodedIncomingMessage = try JSONEncoder().encode(IncomingMessage(text: messageText))
+            let incomingBinary = IncomingBinary(type: .message, payload: encodedIncomingMessage)
             
             let data = try await WebSocket.connect(to: url, headers: header, on: eventLoopGroup.next()) { ws in
-                ws.send(encoded)
-                ws.onBinary { ws, data in
-                    promise.succeed(data)
+                ws.send(incomingBinary.binaryData)
+                ws.onBinary { ws, buffer in
+                    promise.succeed(buffer)
                     ws.close(code: .goingAway).cascadeFailure(to: promise)
                 }
             }.flatMap {
