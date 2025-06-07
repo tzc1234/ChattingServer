@@ -61,50 +61,6 @@ actor MessageController {
             metadata: .init(previousID: metadata?.previousID, nextID: metadata?.nextID)
         )
     }
-    
-    @Sendable
-    private func readMessages(req: Request) async throws -> Response {
-        let userID = try req.auth.require(Payload.self).userID
-        let contactID = try ValidatedContactID(req.parameters).value
-        let untilMessageID = try req.content.decode(ReadMessageRequest.self).untilMessageID
-        
-        guard let contact = try await contactRepository.findBy(id: contactID, userID: userID) else {
-            throw MessageError.contactNotFound
-        }
-        
-        try await messageRepository.updateUnreadMessageToRead(
-            contactID: contactID,
-            userID: userID,
-            untilMessageID: untilMessageID
-        )
-        
-        let sender = try await contactRepository.anotherUser(contact, for: userID)
-        if let webSocket = try await webSocketStore.get(for: contactID, userID: sender.requireID()) {
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            let data = try encoder.encode(UpdatedReadMessagesResponse(
-                contactID: contactID,
-                untilMessageID: untilMessageID,
-                timestamp: .now
-            ))
-            
-            await send(
-                data: [UInt8](data),
-                by: webSocket,
-                logger: req.logger,
-                retry: Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES
-            )
-        } else if let deviceToken = sender.deviceToken, let forUserID = sender.id {
-            await apnsHandler.sendReadMessagesNotification(
-                deviceToken: deviceToken,
-                forUserID: forUserID,
-                contactID: contactID,
-                untilMessageID: untilMessageID
-            )
-        }
-        
-        return Response()
-    }
 }
 
 extension MessageController: RouteCollection {
@@ -113,7 +69,6 @@ extension MessageController: RouteCollection {
             .grouped(AccessTokenGuardMiddleware(), UserAuthenticator())
         
         protected.get(use: index)
-        protected.patch("read", use: readMessages)
         
         let protectedWebSocket = protected
             .grouped(MessageChannelContactValidationMiddleware(contactRepository: contactRepository))
