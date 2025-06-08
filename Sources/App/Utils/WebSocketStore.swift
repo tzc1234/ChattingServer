@@ -21,6 +21,10 @@ actor WebSocketStore {
     
     func remove(for contactID: ContactID, userID: UserID) {
         store[contactID]?[userID] = nil
+        
+        if store[contactID]?.isEmpty == true {
+            store[contactID] = nil
+        }
     }
     
     func isExisted(for contactID: ContactID, userID: UserID) -> Bool {
