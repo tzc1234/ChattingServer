@@ -123,16 +123,16 @@ extension MessageController {
         ws.onBinary { [weak self] ws, buffer in
             guard let self else { return }
             
-            guard let incomingBinary = IncomingBinary.convert(from: Data(buffer: buffer)) else {
+            guard let binary = MessageChannelBinary.convert(from: Data(buffer: buffer)) else {
                 try? await close(ws, for: contactID, with: userID)
                 return
             }
             
             do {
-                switch incomingBinary.type {
+                switch binary.type {
                 case .message:
                     guard let incomingMessage = try? JSONDecoder()
-                        .decode(IncomingMessage.self, from: incomingBinary.payload) else {
+                        .decode(IncomingMessage.self, from: binary.payload) else {
                         try? await close(ws, for: contactID, with: userID)
                         return
                     }
@@ -146,7 +146,7 @@ extension MessageController {
                     )
                 case .readMessages:
                     guard let incomingReadMessage = try? JSONDecoder()
-                        .decode(IncomingReadMessage.self, from: incomingBinary.payload) else {
+                        .decode(IncomingReadMessage.self, from: binary.payload) else {
                         try? await close(ws, for: contactID, with: userID)
                         return
                     }
@@ -193,8 +193,9 @@ extension MessageController {
         )
         
         let data = try encoder.encode(messageResponseWithMetadata)
+        let binary = MessageChannelBinary(type: .message, payload: data)
         await send(
-            data: [UInt8](data),
+            data: [UInt8](binary.binaryData),
             for: contactID,
             logger: logger,
             retry: Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES
@@ -233,9 +234,9 @@ extension MessageController {
                 untilMessageID: untilMessageID,
                 timestamp: .now
             ))
-            
+            let binary = MessageChannelBinary(type: .readMessages, payload: data)
             await send(
-                data: [UInt8](data),
+                data: [UInt8](binary.binaryData),
                 by: senderWebSocket,
                 logger: logger,
                 retry: Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES

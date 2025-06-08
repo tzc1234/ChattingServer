@@ -1,5 +1,5 @@
 //
-//  IncomingBinary.swift
+//  MessageChannelBinary.swift
 //  ChattingServer
 //
 //  Created by Tsz-Lung on 07/06/2025.
@@ -7,14 +7,14 @@
 
 import Foundation
 
-enum IncomingBinaryType: UInt8 {
+enum MessageChannelBinaryType: UInt8 {
     // reserve 0
     case message = 1
     case readMessages = 2
 }
 
-struct IncomingBinary {
-    let type: IncomingBinaryType
+struct MessageChannelBinary {
+    let type: MessageChannelBinaryType
     let payload: Data
     
     var binaryData: Data {
@@ -24,10 +24,10 @@ struct IncomingBinary {
         return data
     }
     
-    static func convert(from data: Data) -> IncomingBinary? {
-        guard !data.isEmpty, let type = IncomingBinaryType(rawValue: data[0]) else { return nil }
+    static func convert(from data: Data) -> MessageChannelBinary? {
+        guard !data.isEmpty, let type = MessageChannelBinaryType(rawValue: data[0]) else { return nil }
         
         let payload = data.dropFirst()
-        return IncomingBinary(type: type, payload: payload)
+        return MessageChannelBinary(type: type, payload: payload)
     }
 }
