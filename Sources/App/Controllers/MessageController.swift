@@ -13,6 +13,12 @@ actor MessageController {
         return encoder
     }()
     
+    private lazy var decoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }()
+    
     private let contactRepository: ContactRepository
     private let messageRepository: MessageRepository
     private let webSocketStore: WebSocketStore
@@ -103,6 +109,7 @@ extension MessageController {
             return
         }
         
+        let decoder = self.decoder
         let currentWebSocketID = ObjectIdentifier(ws)
         await webSocketStore.add(ws, for: contactID, userID: userID)
         
@@ -127,11 +134,18 @@ extension MessageController {
                 try? await close(ws, for: contactID, with: userID)
                 return
             }
-            
             do {
                 switch binary.type {
+                case .heartbeat:
+                    let heartbeatResponse = MessageChannelBinary(type: .heartbeat, payload: Data())
+                    await send(
+                        data: [UInt8](heartbeatResponse.binaryData),
+                        by: ws,
+                        logger: req.logger,
+                        retry: Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES
+                    )
                 case .message:
-                    guard let incomingMessage = try? JSONDecoder()
+                    guard let incomingMessage = try? decoder
                         .decode(IncomingMessage.self, from: binary.payload) else {
                         try? await close(ws, for: contactID, with: userID)
                         return
@@ -145,7 +159,7 @@ extension MessageController {
                         db: req.db
                     )
                 case .readMessages:
-                    guard let incomingReadMessage = try? JSONDecoder()
+                    guard let incomingReadMessage = try? decoder
                         .decode(IncomingReadMessage.self, from: binary.payload) else {
                         try? await close(ws, for: contactID, with: userID)
                         return
