@@ -6,7 +6,10 @@ enum Constants {
     static let REFRESH_TOKEN_LIFETIME: Double = 60 * 60 * 24 * 7 // 7 days
     
     static let AVATARS_DIRECTORY: String = "avatars/"
+    
     static let WEB_SOCKET_SEND_DATA_RETRY_TIMES: UInt = 3
+    static let WEB_SOCKET_CONNECTION_ALIVE_INTERVAL: TimeInterval = 90
+    static let WEB_SOCKET_CONNECTION_ALIVE_CHECKING_INTERVAL: TimeInterval = 60
     
     static let REGISTER_PAYLOAD_MAX_SIZE: ByteCount = "1mb"
 }

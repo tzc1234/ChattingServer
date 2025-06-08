@@ -137,6 +137,8 @@ extension MessageController {
             do {
                 switch binary.type {
                 case .heartbeat:
+                    await webSocketStore.updateTimestampNow(for: contactID, userID: userID)
+                    
                     let heartbeatResponse = MessageChannelBinary(type: .heartbeat, payload: Data())
                     await send(
                         data: [UInt8](heartbeatResponse.binaryData),
