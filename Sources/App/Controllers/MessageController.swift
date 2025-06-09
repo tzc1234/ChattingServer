@@ -7,6 +7,18 @@ typealias UserID = Int
 actor MessageController {
     private var defaultLimit: Int { 20 }
     
+    private lazy var encoder = {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }()
+    
+    private lazy var decoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }()
+    
     private let contactRepository: ContactRepository
     private let messageRepository: MessageRepository
     private let webSocketStore: WebSocketStore
@@ -55,50 +67,6 @@ actor MessageController {
             metadata: .init(previousID: metadata?.previousID, nextID: metadata?.nextID)
         )
     }
-    
-    @Sendable
-    private func readMessages(req: Request) async throws -> Response {
-        let userID = try req.auth.require(Payload.self).userID
-        let contactID = try ValidatedContactID(req.parameters).value
-        let untilMessageID = try req.content.decode(ReadMessageRequest.self).untilMessageID
-        
-        guard let contact = try await contactRepository.findBy(id: contactID, userID: userID) else {
-            throw MessageError.contactNotFound
-        }
-        
-        try await messageRepository.updateUnreadMessageToRead(
-            contactID: contactID,
-            userID: userID,
-            untilMessageID: untilMessageID
-        )
-        
-        let sender = try await contactRepository.anotherUser(contact, for: userID)
-        if let webSocket = try await webSocketStore.get(for: contactID, userID: sender.requireID()) {
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            let data = try encoder.encode(UpdatedReadMessagesResponse(
-                contactID: contactID,
-                untilMessageID: untilMessageID,
-                timestamp: .now
-            ))
-            
-            await send(
-                data: [UInt8](data),
-                by: webSocket,
-                logger: req.logger,
-                retry: Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES
-            )
-        } else if let deviceToken = sender.deviceToken, let forUserID = sender.id {
-            await apnsHandler.sendReadMessagesNotification(
-                deviceToken: deviceToken,
-                forUserID: forUserID,
-                contactID: contactID,
-                untilMessageID: untilMessageID
-            )
-        }
-        
-        return Response()
-    }
 }
 
 extension MessageController: RouteCollection {
@@ -107,7 +75,6 @@ extension MessageController: RouteCollection {
             .grouped(AccessTokenGuardMiddleware(), UserAuthenticator())
         
         protected.get(use: index)
-        protected.patch("read", use: readMessages)
         
         let protectedWebSocket = protected
             .grouped(MessageChannelContactValidationMiddleware(contactRepository: contactRepository))
@@ -137,79 +104,167 @@ extension MessageController {
     @Sendable
     private func messagesChannel(req: Request, ws: WebSocket) async {
         guard let contactID = try? ValidatedContactID(req.parameters).value,
-              let senderID = try? req.auth.require(Payload.self).userID else {
+              let userID = try? req.auth.require(Payload.self).userID else {
             try? await ws.close(code: .unexpectedServerError)
             return
         }
         
-        let webSocketID = ObjectIdentifier(ws)
-        await webSocketStore.add(ws, for: contactID, userID: senderID)
+        let decoder = self.decoder
+        let currentWebSocketID = ObjectIdentifier(ws)
+        await webSocketStore.add(ws, for: contactID, userID: userID)
         
         ws.onClose.whenComplete { [weak webSocketStore] _ in
             Task {
                 if let webSocketStore,
-                   let storedWebSocket = await webSocketStore.get(for: contactID, userID: senderID),
-                   ObjectIdentifier(storedWebSocket) == webSocketID {
-                    await webSocketStore.remove(for: contactID, userID: senderID)
+                   let storedWebSocket = await webSocketStore.get(for: contactID, userID: userID),
+                   ObjectIdentifier(storedWebSocket) == currentWebSocketID {
+                    await webSocketStore.remove(for: contactID, userID: userID)
                 }
             }
         }
         
-        ws.onText { [weak self] ws, text in
-            try? await self?.close(ws, for: contactID, with: senderID)
+        ws.onText { [weak self] ws, _ in
+            try? await self?.close(ws, for: contactID, with: userID)
         }
         
-        ws.onBinary { [weak self] ws, data in
+        ws.onBinary { [weak self] ws, buffer in
             guard let self else { return }
             
-            guard let incoming = try? JSONDecoder().decode(IncomingMessage.self, from: data) else {
-                try? await close(ws, for: contactID, with: senderID)
+            guard let binary = MessageChannelBinary.convert(from: Data(buffer: buffer)) else {
+                try? await close(ws, for: contactID, with: userID)
                 return
             }
-            
             do {
-                let message = Message(contactID: contactID, senderID: senderID, text: incoming.text)
-                try await messageRepository.create(message)
-                guard let messageCreatedAt = message.createdAt else { throw MessageError.databaseError }
-                
-                let messageID = try message.requireID()
-                let metadata = try await messageRepository.getMetadata(
-                    from: messageID,
-                    to: messageID,
-                    contactID: contactID
-                )
-                let messageResponse = MessageResponse(
-                    id: messageID,
-                    text: message.text,
-                    senderID: senderID,
-                    isRead: message.isRead,
-                    createdAt: messageCreatedAt
-                )
-                let messageResponseWithMetadata = MessageResponseWithMetadata(
-                    message: messageResponse,
-                    metadata: .init(previousID: metadata.previousID)
-                )
-                
-                let encoder = JSONEncoder()
-                encoder.dateEncodingStrategy = .iso8601
-                let data = try encoder.encode(messageResponseWithMetadata)
-                
-                await send(
-                    data: [UInt8](data),
-                    for: contactID,
-                    logger: req.logger,
-                    retry: Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES
-                )
-                
-                try await sendMessagePushNotification(
-                    contactID: contactID,
-                    senderID: senderID,
-                    db: req.db,
-                    messageResponse: messageResponseWithMetadata
-                )
+                switch binary.type {
+                case .heartbeat:
+                    await webSocketStore.updateTimestampNow(for: contactID, userID: userID)
+                    
+                    let heartbeatResponse = MessageChannelBinary(type: .heartbeat, payload: Data())
+                    await send(
+                        data: [UInt8](heartbeatResponse.binaryData),
+                        by: ws,
+                        logger: req.logger,
+                        retry: Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES
+                    )
+                case .message:
+                    guard let incomingMessage = try? decoder
+                        .decode(IncomingMessage.self, from: binary.payload) else {
+                        try? await close(ws, for: contactID, with: userID)
+                        return
+                    }
+                    
+                    try await handle(
+                        incomingMessage,
+                        contactID: contactID,
+                        userID: userID,
+                        logger: req.logger,
+                        db: req.db
+                    )
+                case .readMessages:
+                    guard let incomingReadMessage = try? decoder
+                        .decode(IncomingReadMessage.self, from: binary.payload) else {
+                        try? await close(ws, for: contactID, with: userID)
+                        return
+                    }
+                    
+                    try await handle(
+                        incomingReadMessage,
+                        contactID: contactID,
+                        userID: userID,
+                        logger: req.logger,
+                        db: req.db
+                    )
+                }
             } catch {
                 req.logger.error(Logger.Message(stringLiteral: error.localizedDescription))
             }
+        }
+    }
+    
+    private func handle(_ incomingMessage: IncomingMessage,
+                        contactID: Int,
+                        userID: Int,
+                        logger: Logger,
+                        db: Database) async throws {
+        let message = Message(contactID: contactID, senderID: userID, text: incomingMessage.text)
+        try await messageRepository.create(message)
+        guard let messageCreatedAt = message.createdAt else { throw MessageError.databaseError }
+        
+        let messageID = try message.requireID()
+        let metadata = try await messageRepository.getMetadata(
+            from: messageID,
+            to: messageID,
+            contactID: contactID
+        )
+        let messageResponse = MessageResponse(
+            id: messageID,
+            text: message.text,
+            senderID: userID,
+            isRead: message.isRead,
+            createdAt: messageCreatedAt
+        )
+        let messageResponseWithMetadata = MessageResponseWithMetadata(
+            message: messageResponse,
+            metadata: .init(previousID: metadata.previousID)
+        )
+        
+        let data = try encoder.encode(messageResponseWithMetadata)
+        let binary = MessageChannelBinary(type: .message, payload: data)
+        await send(
+            data: [UInt8](binary.binaryData),
+            for: contactID,
+            logger: logger,
+            retry: Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES
+        )
+        
+        try await sendMessagePushNotification(
+            contactID: contactID,
+            senderID: userID,
+            db: db,
+            messageResponse: messageResponseWithMetadata
+        )
+    }
+    
+    private func handle(_ incomingReadMessage: IncomingReadMessage,
+                        contactID: Int,
+                        userID: Int,
+                        logger: Logger,
+                        db: Database) async throws {
+        guard let contact = try await contactRepository.findBy(id: contactID, userID: userID) else {
+            throw MessageError.contactNotFound
+        }
+        
+        let untilMessageID = incomingReadMessage.untilMessageID
+        try await messageRepository.updateUnreadMessageToRead(
+            contactID: contactID,
+            userID: userID,
+            untilMessageID: untilMessageID
+        )
+        
+        let sender = try await contactRepository.anotherUser(contact, for: userID)
+        let senderID = try sender.requireID()
+        // If sender is connecting, send an UpdatedReadMessagesResponse via webSocket.
+        if let senderWebSocket = await webSocketStore.get(for: contactID, userID: senderID) {
+            let data = try encoder.encode(UpdatedReadMessagesResponse(
+                contactID: contactID,
+                untilMessageID: untilMessageID,
+                timestamp: .now
+            ))
+            let binary = MessageChannelBinary(type: .readMessages, payload: data)
+            await send(
+                data: [UInt8](binary.binaryData),
+                by: senderWebSocket,
+                logger: logger,
+                retry: Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES
+            )
+        // If not connecting, fallback to push background notification.
+        } else if let deviceToken = sender.deviceToken {
+            await apnsHandler.sendReadMessagesNotification(
+                deviceToken: deviceToken,
+                forUserID: senderID,
+                contactID: contactID,
+                untilMessageID: untilMessageID
+            )
         }
     }
     

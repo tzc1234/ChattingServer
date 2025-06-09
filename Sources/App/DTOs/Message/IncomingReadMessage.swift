@@ -1,6 +1,13 @@
+//
+//  IncomingReadMessage.swift
+//  ChattingServer
+//
+//  Created by Tsz-Lung on 07/06/2025.
+//
+
 import Vapor
 
-struct ReadMessageRequest: Content {
+struct IncomingReadMessage: Content {
     let untilMessageID: Int
     
     enum CodingKeys: String, CodingKey {

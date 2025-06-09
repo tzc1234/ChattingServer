@@ -191,98 +191,6 @@ struct MessageTests: AppTests {
         }
     }
     
-    @Test("read message failure without a token")
-    func readMessageFailureWithoutToken() async throws {
-        try await makeApp { app in
-            try await app.test(.PATCH, messageAPIPath("read")) { res async throws in
-                #expect(res.status == .unauthorized)
-            }
-        }
-    }
-    
-    @Test("read message failure with an invalid token")
-    func readMessageWithInvalidToken() async throws {
-        let invalidToken = "invalid-token"
-        
-        try await makeApp { app in
-            try await app.test(.PATCH, messageAPIPath("read")) { req in
-                req.headers.bearerAuthorization = BearerAuthorization(token: invalidToken)
-            } afterResponse: { res async throws in
-                #expect(res.status == .unauthorized)
-            }
-        }
-    }
-    
-    @Test("read message failure with a non-existed contact")
-    func readMessageFailureWithNonExistedContact() async throws {
-        try await makeApp { app in
-            let (_, token) = try await createUserAndAccessToken(app)
-            
-            try await app.test(.PATCH, messageAPIPath("read")) { req in
-                req.headers.bearerAuthorization = BearerAuthorization(token: token)
-                try req.content.encode(ReadMessageRequest(untilMessageID: 1))
-            } afterResponse: { res async throws in
-                #expect(res.status == .notFound)
-            }
-        }
-    }
-    
-    @Test("read message ok with a non-existed messageID")
-    func readMessageOKWithNonExistedMessageID() async throws {
-        try await makeApp { app in
-            let (currentUser, accessToken) = try await createUserAndAccessToken(app)
-            let anotherUser = try await createUser(app, email: "another@email.com")
-            try await createContact(
-                user: currentUser,
-                anotherUser: anotherUser,
-                messageDetails: [],
-                db: app.db
-            )
-            let nonExistedMessageID = 1
-            
-            try await app.test(.PATCH, messageAPIPath("read")) { req in
-                req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
-                try req.content.encode(ReadMessageRequest(untilMessageID: nonExistedMessageID))
-            } afterResponse: { res async throws in
-                #expect(res.status == .ok)
-            }
-        }
-    }
-    
-    @Test("read all messages until a messageID which belongs to current user (sender not equal current user)")
-    func readAllMessageUntilMessageID() async throws {
-        try await makeApp { app in
-            let (currentUser, accessToken) = try await createUserAndAccessToken(app)
-            let anotherUser = try await createUser(app, email: "another@email.com")
-            let messageDetails = [
-                MessageDetail(id: 1, senderID: currentUser.id!, isRead: false),
-                MessageDetail(id: 2, senderID: anotherUser.id!, isRead: false),
-                MessageDetail(id: 3, senderID: anotherUser.id!, isRead: false),
-                MessageDetail(id: 4, senderID: anotherUser.id!, isRead: false),
-            ]
-            let contact = try await createContact(
-                user: currentUser,
-                anotherUser: anotherUser,
-                messageDetails: messageDetails,
-                db: app.db
-            )
-            let untilMessageID = 3
-            
-            try await app.test(.PATCH, messageAPIPath("read")) { req in
-                req.headers.bearerAuthorization = BearerAuthorization(token: accessToken)
-                try req.content.encode(ReadMessageRequest(untilMessageID: untilMessageID))
-            } afterResponse: { res async throws in
-                #expect(res.status == .ok)
-                
-                let messages = try await contact.$messages.get(reload: true, on: app.db)
-                #expect(messages[0].isRead == false)
-                #expect(messages[1].isRead == true)
-                #expect(messages[2].isRead == true)
-                #expect(messages[3].isRead == false)
-            }
-        }
-    }
-    
     @Test("send message with webSocket successfully")
     func sendMessageWithWebSocketSuccessfully() async throws {
         let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
@@ -305,12 +213,13 @@ struct MessageTests: AppTests {
             header.bearerAuthorization = BearerAuthorization(token: accessToken)
             
             let messageText = "Hello, world!"
-            let encoded = try JSONEncoder().encode(IncomingMessage(text: messageText))
+            let encodedIncomingMessage = try JSONEncoder().encode(IncomingMessage(text: messageText))
+            let binary = MessageChannelBinary(type: .message, payload: encodedIncomingMessage)
             
             let data = try await WebSocket.connect(to: url, headers: header, on: eventLoopGroup.next()) { ws in
-                ws.send(encoded)
-                ws.onBinary { ws, data in
-                    promise.succeed(data)
+                ws.send(binary.binaryData)
+                ws.onBinary { ws, buffer in
+                    promise.succeed(buffer)
                     ws.close(code: .goingAway).cascadeFailure(to: promise)
                 }
             }.flatMap {
@@ -320,9 +229,11 @@ struct MessageTests: AppTests {
                 return promise.futureResult
             }.get()
             
+            let outputBinary = try #require(MessageChannelBinary.convert(from: Data(buffer: data)))
+            
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
-            let decoded = try decoder.decode(MessageResponseWithMetadata.self, from: data)
+            let decoded = try decoder.decode(MessageResponseWithMetadata.self, from: outputBinary.payload)
             #expect(decoded.message.text == messageText)
         }
     }
