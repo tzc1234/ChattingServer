@@ -83,12 +83,8 @@ struct AuthenticationController {
     
     private func newTokenResponse(for user: User, req: Request) async throws -> TokenResponse {
         let (accessToken, refreshToken) = try await generateNewTokens(for: user, req: req)
-        return await TokenResponse(
-            user: try user.toResponse { [weak avatarLinkLoader] filename in
-                guard let filename else { return nil }
-                
-                return await avatarLinkLoader?.get(filename: filename)
-            },
+        return TokenResponse(
+            user: try await makeUserResponse(by: user),
             accessToken: accessToken,
             refreshToken: refreshToken
         )
@@ -113,11 +109,7 @@ struct AuthenticationController {
             throw AuthenticationError.userNotFound
         }
         
-        return try await user.toResponse { [weak avatarLinkLoader] filename in
-            guard let filename else { return nil }
-            
-            return await avatarLinkLoader?.get(filename: filename)
-        }
+        return try await makeUserResponse(by: user)
     }
     
     @Sendable
@@ -125,24 +117,16 @@ struct AuthenticationController {
         try UpdateUserRequest.validate(content: req)
         let request = try req.content.decode(UpdateUserRequest.self)
         let userID = try req.auth.require(Payload.self).userID
-        guard let user = try await userRepository.findBy(id: userID) else {
-            throw AuthenticationError.userNotFound
-        }
+        guard let user = try await userRepository.findBy(id: userID) else { throw AuthenticationError.userNotFound }
         
         user.name = request.name
+        let oldAvatarFilename = user.avatarFilename
+        var newAvatarFilename: String?
+        
         if let avatar = request.avatar {
             do {
-                let oldAvatarFilename = user.avatarFilename
-                
-                // Save the new avatar here.
-                let newAvatarFilename = try await avatarFileSaver.save(avatar)
+                newAvatarFilename = try await avatarFileSaver.save(avatar)
                 user.avatarFilename = newAvatarFilename
-                
-                // Make sure user update success before delete the old avatar.
-                try await user.update(on: req.db)
-                if let oldAvatarFilename {
-                    try await avatarFileSaver.delete(oldAvatarFilename)
-                }
             } catch let error as AvatarFileSaver.Error {
                 throw Abort(.unsupportedMediaType, reason: error.reason)
             } catch {
@@ -150,7 +134,24 @@ struct AuthenticationController {
             }
         }
         
-        return try await user.toResponse { [weak avatarLinkLoader] filename in
+        do {
+            // Make sure user update success before delete the old avatar.
+            try await user.update(on: req.db)
+            if let oldAvatarFilename, newAvatarFilename != nil {
+                try? await avatarFileSaver.delete(oldAvatarFilename)
+            }
+        } catch {
+            // Delete the new avatar file if user update error occurred.
+            if let newAvatarFilename { try? await avatarFileSaver.delete(newAvatarFilename) }
+            throw error
+        }
+        
+        return try await makeUserResponse(by: user)
+    }
+    
+    @Sendable
+    private func makeUserResponse(by user: User) async throws -> UserResponse {
+        try await user.toResponse { [weak avatarLinkLoader] filename in
             guard let filename else { return nil }
             
             return await avatarLinkLoader?.get(filename: filename)
