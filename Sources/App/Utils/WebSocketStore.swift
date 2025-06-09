@@ -27,7 +27,7 @@ actor WebSocketStore {
                 if await !store.isEmpty {
                     let now = Date.now
                     for (_, connections) in await store {
-                        for (userID, connection) in connections {
+                        for (_, connection) in connections {
                             let aliveInterval = Constants.WEB_SOCKET_CONNECTION_ALIVE_INTERVAL
                             if now.timeIntervalSince(connection.timestamp) > aliveInterval {
                                 try? await connection.webSocket.close(code: .goingAway)
