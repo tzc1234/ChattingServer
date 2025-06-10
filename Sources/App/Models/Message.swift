@@ -22,6 +22,12 @@ final class Message: Model, @unchecked Sendable {
     @Timestamp(key: "created_at", on: .create)
     var createdAt: Date?
     
+    @Children(for: \.$message)
+    var editHistories: [MessageEditHistory]
+    
+    @Field(key: "edited_at")
+    var editedAt: Date?
+    
     init() {}
     
     init(id: Int? = nil, contactID: Contact.IDValue, senderID: User.IDValue, text: String, isRead: Bool = false) {
