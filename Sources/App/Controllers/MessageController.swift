@@ -12,7 +12,6 @@ actor MessageController {
         encoder.dateEncodingStrategy = .iso8601
         return encoder
     }()
-    
     private lazy var decoder = {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -129,20 +128,19 @@ extension MessageController {
         
         ws.onBinary { [weak self] ws, buffer in
             guard let self else { return }
-            guard let binary = MessageChannelIncomingBinary.convert(from: Data(buffer: buffer)) else {
+            guard let incomingBinary = MessageChannelIncomingBinary.convert(from: Data(buffer: buffer)) else {
                 try? await close(ws, for: contactID, with: userID)
                 return
             }
             
             do {
-                switch binary.type {
+                switch incomingBinary.type {
                 case .heartbeat:
                     await webSocketStore.updateTimestampNow(for: contactID, userID: userID)
-                    let heartbeatResponse = MessageChannelOutgoingBinary(type: .heartbeat, payload: Data())
-                    await send(data: heartbeatResponse.binaryData, by: ws, logger: req.logger)
+                    let outgoingBinary = MessageChannelOutgoingBinary(type: .heartbeat, payload: Data())
+                    await send(data: outgoingBinary.binaryData, by: ws, logger: req.logger)
                 case .message:
-                    guard let incomingMessage = try? decoder
-                        .decode(IncomingMessage.self, from: binary.payload) else {
+                    guard let incomingMessage = try? decoder.decode(IncomingMessage.self, from: incomingBinary.payload) else {
                         try? await close(ws, for: contactID, with: userID)
                         return
                     }
@@ -155,8 +153,7 @@ extension MessageController {
                         db: req.db
                     )
                 case .readMessages:
-                    guard let incomingReadMessage = try? decoder
-                        .decode(IncomingReadMessage.self, from: binary.payload) else {
+                    guard let incomingReadMessage = try? decoder.decode(IncomingReadMessage.self, from: incomingBinary.payload) else {
                         try? await close(ws, for: contactID, with: userID)
                         return
                     }
@@ -169,7 +166,7 @@ extension MessageController {
                         db: req.db
                     )
                 case .editMessage:
-                    guard let editMessage = try? decoder.decode(EditMessage.self, from: binary.payload) else {
+                    guard let editMessage = try? decoder.decode(EditMessage.self, from: incomingBinary.payload) else {
                         try? await close(ws, for: contactID, with: userID)
                         return
                     }
@@ -190,14 +187,14 @@ extension MessageController {
                     )
                     
                     let encoded = try await encoder.encode(messageResponseWithMetadata)
-                    let messageBinary = MessageChannelOutgoingBinary(type: .message, payload: encoded)
-                    await send(data: messageBinary.binaryData, for: contactID, logger: req.logger)
+                    let outgoingBinary = MessageChannelOutgoingBinary(type: .message, payload: encoded)
+                    await send(data: outgoingBinary.binaryData, for: contactID, logger: req.logger)
                 }
             } catch let error as MessageError {
                 let messageChannelError = MessageChannelError(reason: error.reason)
                 if let encodedError = try? await encoder.encode(messageChannelError) {
-                    let messageBinary = MessageChannelOutgoingBinary(type: .error, payload: encodedError)
-                    await send(data: messageBinary.binaryData, by: ws, logger: req.logger)
+                    let outgoingBinary = MessageChannelOutgoingBinary(type: .error, payload: encodedError)
+                    await send(data: outgoingBinary.binaryData, by: ws, logger: req.logger)
                 }
             } catch {
                 req.logger.error(Logger.Message(stringLiteral: error.localizedDescription))
@@ -206,8 +203,8 @@ extension MessageController {
     }
     
     private func handle(_ incomingMessage: IncomingMessage,
-                        contactID: Int,
-                        userID: Int,
+                        contactID: ContactID,
+                        userID: UserID,
                         logger: Logger,
                         db: Database) async throws {
         let message = Message(contactID: contactID, senderID: userID, text: incomingMessage.text)
@@ -227,8 +224,8 @@ extension MessageController {
     }
     
     private func handle(_ incomingReadMessage: IncomingReadMessage,
-                        contactID: Int,
-                        userID: Int,
+                        contactID: ContactID,
+                        userID: UserID,
                         logger: Logger,
                         db: Database) async throws {
         guard let contact = try await contactRepository.findBy(id: contactID, userID: userID) else {
@@ -265,7 +262,7 @@ extension MessageController {
     }
     
     private func makeMessageResponseWithMetadata(_ message: Message,
-                                                 contactID: Int) async throws -> MessageResponseWithMetadata {
+                                                 contactID: ContactID) async throws -> MessageResponseWithMetadata {
         let messageID = try message.requireID()
         let metadata = try await messageRepository.getMetadata(
             from: messageID,
@@ -329,7 +326,7 @@ extension MessageController {
     }
     
     private func contactResponse(_ contact: Contact,
-                                 for userID: Int,
+                                 for userID: UserID,
                                  with messageResponse: MessageResponseWithMetadata) async throws -> ContactResponse {
         try await contact.toResponse(
             currentUserID: userID,
