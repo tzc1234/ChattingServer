@@ -28,7 +28,6 @@ actor MessageRepository {
     enum Error: Swift.Error {
         case databaseConversion
         case metadataNotFound
-        case messageNotFound
     }
     
     func getMessages(contactID: ContactID,
@@ -167,14 +166,14 @@ actor MessageRepository {
         try await message.create(on: database)
     }
     
-    func editMessage(by messageID: Int, userID: UserID, newText: String) async throws -> Message {
-        guard let message = try await Message.query(on: database)
+    func getMessage(by messageID: Int, userID: UserID) async throws -> Message? {
+        try await Message.query(on: database)
             .filter(\.$id == messageID)
             .filter(\.$sender.$id == userID)
-            .first() else {
-            throw Error.messageNotFound
-        }
-        
+            .first()
+    }
+    
+    func editMessage(_ message: Message, newText: String) async throws {
         let messageEditHistory = MessageEditHistory(
             messageID: try message.requireID(),
             previousText: message.text,
@@ -186,7 +185,6 @@ actor MessageRepository {
             message.text = newText
             message.editedAt = messageEditHistory.editedAt
             try await message.update(on: database)
-            return message
         } catch {
             try? await messageEditHistory.delete(on: database)
             throw error

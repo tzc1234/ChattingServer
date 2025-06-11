@@ -85,7 +85,8 @@ struct MessageTests: AppTests {
                     text: $0.text,
                     senderID: $0.senderID,
                     isRead: $0.isRead,
-                    createdAt: $0.createdAt
+                    createdAt: $0.createdAt,
+                    editedAt: nil
                 )
             }
             
@@ -130,7 +131,8 @@ struct MessageTests: AppTests {
                         text: $0.text,
                         senderID: $0.senderID,
                         isRead: $0.isRead,
-                        createdAt: $0.createdAt
+                        createdAt: $0.createdAt,
+                        editedAt: nil
                     )
                 }
             
@@ -175,7 +177,8 @@ struct MessageTests: AppTests {
                         text: $0.text,
                         senderID: $0.senderID,
                         isRead: $0.isRead,
-                        createdAt: $0.createdAt
+                        createdAt: $0.createdAt,
+                        editedAt: nil
                     )
                 }
             

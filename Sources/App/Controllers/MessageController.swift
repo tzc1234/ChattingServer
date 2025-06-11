@@ -129,23 +129,17 @@ extension MessageController {
         
         ws.onBinary { [weak self] ws, buffer in
             guard let self else { return }
-            
             guard let binary = MessageChannelBinary.convert(from: Data(buffer: buffer)) else {
                 try? await close(ws, for: contactID, with: userID)
                 return
             }
+            
             do {
                 switch binary.type {
                 case .heartbeat:
                     await webSocketStore.updateTimestampNow(for: contactID, userID: userID)
-                    
                     let heartbeatResponse = MessageChannelBinary(type: .heartbeat, payload: Data())
-                    await send(
-                        data: [UInt8](heartbeatResponse.binaryData),
-                        by: ws,
-                        logger: req.logger,
-                        retry: Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES
-                    )
+                    await send(data: heartbeatResponse.binaryData, by: ws, logger: req.logger)
                 case .message:
                     guard let incomingMessage = try? decoder
                         .decode(IncomingMessage.self, from: binary.payload) else {
@@ -174,6 +168,47 @@ extension MessageController {
                         logger: req.logger,
                         db: req.db
                     )
+                case .editMessage:
+                    guard let editMessage = try? decoder.decode(EditMessage.self, from: binary.payload) else {
+                        try? await close(ws, for: contactID, with: userID)
+                        return
+                    }
+                    
+                    guard let message = try await messageRepository.getMessage(by: editMessage.messageID, userID: userID),
+                          let messageID = message.id,
+                          let createdAt = message.createdAt else {
+                        throw MessageError.messageNotFound
+                    }
+                    
+                    guard Date.now.timeIntervalSince(createdAt) <= Constants.EDITABLE_MESSAGE_INTERVAL else {
+                        throw MessageError.messageUnableEdit
+                    }
+                    
+                    try await messageRepository.editMessage(message, newText: editMessage.text)
+                    
+                    let metadata = try await messageRepository.getMetadata(
+                        from: messageID,
+                        to: messageID,
+                        contactID: contactID
+                    )
+                    let messageResponse = try message.toResponse()
+                    let messageResponseWithMetadata = MessageResponseWithMetadata(
+                        message: messageResponse,
+                        metadata: .init(previousID: metadata.previousID)
+                    )
+                    
+                    let encoded = try await encoder.encode(messageResponseWithMetadata)
+                    let messageBinary = MessageChannelBinary(type: .message, payload: encoded)
+                    await send(data: messageBinary.binaryData, for: contactID, logger: req.logger)
+                case .error:
+                    try? await close(ws, for: contactID, with: userID)
+                    return
+                }
+            } catch let error as MessageError {
+                let messageChannelError = MessageChannelError(reason: error.reason)
+                if let encodedError = try? await encoder.encode(messageChannelError) {
+                    let messageBinary = MessageChannelBinary(type: .error, payload: encodedError)
+                    await send(data: messageBinary.binaryData, by: ws, logger: req.logger)
                 }
             } catch {
                 req.logger.error(Logger.Message(stringLiteral: error.localizedDescription))
@@ -201,7 +236,8 @@ extension MessageController {
             text: message.text,
             senderID: userID,
             isRead: message.isRead,
-            createdAt: messageCreatedAt
+            createdAt: messageCreatedAt,
+            editedAt: nil
         )
         let messageResponseWithMetadata = MessageResponseWithMetadata(
             message: messageResponse,
@@ -210,12 +246,7 @@ extension MessageController {
         
         let data = try encoder.encode(messageResponseWithMetadata)
         let binary = MessageChannelBinary(type: .message, payload: data)
-        await send(
-            data: [UInt8](binary.binaryData),
-            for: contactID,
-            logger: logger,
-            retry: Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES
-        )
+        await send(data: binary.binaryData, for: contactID, logger: logger)
         
         try await sendMessagePushNotification(
             contactID: contactID,
@@ -251,12 +282,7 @@ extension MessageController {
                 timestamp: .now
             ))
             let binary = MessageChannelBinary(type: .readMessages, payload: data)
-            await send(
-                data: [UInt8](binary.binaryData),
-                by: senderWebSocket,
-                logger: logger,
-                retry: Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES
-            )
+            await send(data: binary.binaryData, by: senderWebSocket, logger: logger)
         // If not connecting, fallback to push background notification.
         } else if let deviceToken = sender.deviceToken {
             await apnsHandler.sendReadMessagesNotification(
@@ -268,15 +294,21 @@ extension MessageController {
         }
     }
     
-    private func send(data: [UInt8], for contactID: ContactID, logger: Logger, retry: UInt) async {
+    private func send(data: Data,
+                      for contactID: ContactID,
+                      logger: Logger,
+                      retry: UInt = Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES) async {
         for webSocket in await webSocketStore.get(for: contactID) {
             await send(data: data, by: webSocket, logger: logger, retry: retry)
         }
     }
     
-    private func send(data: [UInt8], by webSocket: WebSocket, logger: Logger, retry: UInt) async {
+    private func send(data: Data,
+                      by webSocket: WebSocket,
+                      logger: Logger,
+                      retry: UInt = Constants.WEB_SOCKET_SEND_DATA_RETRY_TIMES) async {
         do {
-            try await webSocket.send(data)
+            try await webSocket.send([UInt8](data))
         } catch {
             logger.error(Logger.Message(stringLiteral: error.localizedDescription))
             

@@ -48,7 +48,8 @@ extension Message {
             text: text,
             senderID: $sender.id,
             isRead: isRead,
-            createdAt: createdAt
+            createdAt: createdAt,
+            editedAt: editedAt
         )
     }
 }

@@ -12,6 +12,8 @@ enum Constants {
     static let WEB_SOCKET_CONNECTION_ALIVE_CHECKING_INTERVAL: TimeInterval = 60
     
     static let REGISTER_PAYLOAD_MAX_SIZE: ByteCount = "1mb"
+    
+    static let EDITABLE_MESSAGE_INTERVAL: TimeInterval = 60 * 15
 }
 
 extension TimeInterval {
