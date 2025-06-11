@@ -175,7 +175,6 @@ extension MessageController {
                     }
                     
                     guard let message = try await messageRepository.getMessage(by: editMessage.messageID, userID: userID),
-                          let messageID = message.id,
                           let createdAt = message.createdAt else {
                         throw MessageError.messageNotFound
                     }
@@ -185,16 +184,9 @@ extension MessageController {
                     }
                     
                     try await messageRepository.editMessage(message, newText: editMessage.text)
-                    
-                    let metadata = try await messageRepository.getMetadata(
-                        from: messageID,
-                        to: messageID,
+                    let messageResponseWithMetadata = try await makeMessageResponseWithMetadata(
+                        message,
                         contactID: contactID
-                    )
-                    let messageResponse = try message.toResponse()
-                    let messageResponseWithMetadata = MessageResponseWithMetadata(
-                        message: messageResponse,
-                        metadata: .init(previousID: metadata.previousID)
                     )
                     
                     let encoded = try await encoder.encode(messageResponseWithMetadata)
@@ -223,29 +215,10 @@ extension MessageController {
                         db: Database) async throws {
         let message = Message(contactID: contactID, senderID: userID, text: incomingMessage.text)
         try await messageRepository.create(message)
-        guard let messageCreatedAt = message.createdAt else { throw MessageError.databaseError }
+        let messageResponseWithMetadata = try await makeMessageResponseWithMetadata(message, contactID: contactID)
         
-        let messageID = try message.requireID()
-        let metadata = try await messageRepository.getMetadata(
-            from: messageID,
-            to: messageID,
-            contactID: contactID
-        )
-        let messageResponse = MessageResponse(
-            id: messageID,
-            text: message.text,
-            senderID: userID,
-            isRead: message.isRead,
-            createdAt: messageCreatedAt,
-            editedAt: nil
-        )
-        let messageResponseWithMetadata = MessageResponseWithMetadata(
-            message: messageResponse,
-            metadata: .init(previousID: metadata.previousID)
-        )
-        
-        let data = try encoder.encode(messageResponseWithMetadata)
-        let binary = MessageChannelBinary(type: .message, payload: data)
+        let encoded = try encoder.encode(messageResponseWithMetadata)
+        let binary = MessageChannelBinary(type: .message, payload: encoded)
         await send(data: binary.binaryData, for: contactID, logger: logger)
         
         try await sendMessagePushNotification(
@@ -292,6 +265,20 @@ extension MessageController {
                 untilMessageID: untilMessageID
             )
         }
+    }
+    
+    private func makeMessageResponseWithMetadata(_ message: Message,
+                                                 contactID: Int) async throws -> MessageResponseWithMetadata {
+        let messageID = try message.requireID()
+        let metadata = try await messageRepository.getMetadata(
+            from: messageID,
+            to: messageID,
+            contactID: contactID
+        )
+        return MessageResponseWithMetadata(
+            message: try message.toResponse(),
+            metadata: .init(previousID: metadata.previousID)
+        )
     }
     
     private func send(data: Data,

@@ -183,6 +183,7 @@ actor MessageRepository {
         
         do {
             message.text = newText
+            message.isRead = false
             message.editedAt = messageEditHistory.editedAt
             try await message.update(on: database)
         } catch {

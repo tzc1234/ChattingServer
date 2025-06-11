@@ -36,6 +36,7 @@ final class Message: Model, @unchecked Sendable {
         self.$sender.id = senderID
         self.text = text
         self.isRead = isRead
+        self.editedAt = nil
     }
 }
 
