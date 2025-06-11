@@ -217,7 +217,7 @@ struct MessageTests: AppTests {
             
             let messageText = "Hello, world!"
             let encodedIncomingMessage = try JSONEncoder().encode(IncomingMessage(text: messageText))
-            let binary = MessageChannelBinary(type: .message, payload: encodedIncomingMessage)
+            let binary = MessageChannelIncomingBinary(type: .message, payload: encodedIncomingMessage)
             
             let data = try await WebSocket.connect(to: url, headers: header, on: eventLoopGroup.next()) { ws in
                 ws.send(binary.binaryData)
@@ -232,7 +232,7 @@ struct MessageTests: AppTests {
                 return promise.futureResult
             }.get()
             
-            let outputBinary = try #require(MessageChannelBinary.convert(from: Data(buffer: data)))
+            let outputBinary = try #require(MessageChannelOutgoingBinary.convert(from: Data(buffer: data)))
             
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601

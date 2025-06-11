@@ -129,7 +129,7 @@ extension MessageController {
         
         ws.onBinary { [weak self] ws, buffer in
             guard let self else { return }
-            guard let binary = MessageChannelBinary.convert(from: Data(buffer: buffer)) else {
+            guard let binary = MessageChannelIncomingBinary.convert(from: Data(buffer: buffer)) else {
                 try? await close(ws, for: contactID, with: userID)
                 return
             }
@@ -138,7 +138,7 @@ extension MessageController {
                 switch binary.type {
                 case .heartbeat:
                     await webSocketStore.updateTimestampNow(for: contactID, userID: userID)
-                    let heartbeatResponse = MessageChannelBinary(type: .heartbeat, payload: Data())
+                    let heartbeatResponse = MessageChannelOutgoingBinary(type: .heartbeat, payload: Data())
                     await send(data: heartbeatResponse.binaryData, by: ws, logger: req.logger)
                 case .message:
                     guard let incomingMessage = try? decoder
@@ -190,16 +190,13 @@ extension MessageController {
                     )
                     
                     let encoded = try await encoder.encode(messageResponseWithMetadata)
-                    let messageBinary = MessageChannelBinary(type: .message, payload: encoded)
+                    let messageBinary = MessageChannelOutgoingBinary(type: .message, payload: encoded)
                     await send(data: messageBinary.binaryData, for: contactID, logger: req.logger)
-                case .error:
-                    try? await close(ws, for: contactID, with: userID)
-                    return
                 }
             } catch let error as MessageError {
                 let messageChannelError = MessageChannelError(reason: error.reason)
                 if let encodedError = try? await encoder.encode(messageChannelError) {
-                    let messageBinary = MessageChannelBinary(type: .error, payload: encodedError)
+                    let messageBinary = MessageChannelOutgoingBinary(type: .error, payload: encodedError)
                     await send(data: messageBinary.binaryData, by: ws, logger: req.logger)
                 }
             } catch {
@@ -218,7 +215,7 @@ extension MessageController {
         let messageResponseWithMetadata = try await makeMessageResponseWithMetadata(message, contactID: contactID)
         
         let encoded = try encoder.encode(messageResponseWithMetadata)
-        let binary = MessageChannelBinary(type: .message, payload: encoded)
+        let binary = MessageChannelOutgoingBinary(type: .message, payload: encoded)
         await send(data: binary.binaryData, for: contactID, logger: logger)
         
         try await sendMessagePushNotification(
@@ -254,7 +251,7 @@ extension MessageController {
                 untilMessageID: untilMessageID,
                 timestamp: .now
             ))
-            let binary = MessageChannelBinary(type: .readMessages, payload: data)
+            let binary = MessageChannelOutgoingBinary(type: .readMessages, payload: data)
             await send(data: binary.binaryData, by: senderWebSocket, logger: logger)
         // If not connecting, fallback to push background notification.
         } else if let deviceToken = sender.deviceToken {
