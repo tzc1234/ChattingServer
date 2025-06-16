@@ -31,5 +31,6 @@ func configure(_ app: Application) async throws {
     app.migrations.add(AddDeviceTokenToUser())
     app.migrations.add(CreateMessageEditHistory())
     app.migrations.add(AddEditedAtToMessage())
+    app.migrations.add(AddUpdatedAtToMessage())
     try await app.autoMigrate()
 }
