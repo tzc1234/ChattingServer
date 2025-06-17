@@ -7,6 +7,7 @@ struct MessageResponse: Content, Equatable {
     let isRead: Bool
     let createdAt: Date
     let editedAt: Date?
+    let deletedAt: Date?
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -15,6 +16,7 @@ struct MessageResponse: Content, Equatable {
         case isRead = "is_read"
         case createdAt = "created_at"
         case editedAt = "edited_at"
+        case deletedAt = "deleted_at"
     }
 }
 

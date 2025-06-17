@@ -32,5 +32,6 @@ func configure(_ app: Application) async throws {
     app.migrations.add(CreateMessageEditHistory())
     app.migrations.add(AddEditedAtToMessage())
     app.migrations.add(AddUpdatedAtToMessage())
+    app.migrations.add(AddDeletedAtToMessage())
     try await app.autoMigrate()
 }

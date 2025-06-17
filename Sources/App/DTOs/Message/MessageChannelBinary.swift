@@ -13,6 +13,7 @@ struct MessageChannelIncomingBinary {
         case message = 1
         case readMessages = 2
         case editMessage = 3
+        case deleteMessage = 4
     }
     
     let type: BinaryType

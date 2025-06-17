@@ -31,6 +31,9 @@ final class Message: Model, @unchecked Sendable {
     @Field(key: "edited_at")
     var editedAt: Date?
     
+    @Field(key: "deleted_at")
+    var deletedAt: Date?
+    
     init() {}
     
     init(id: Int? = nil, contactID: Contact.IDValue, senderID: User.IDValue, text: String, isRead: Bool = false) {
@@ -40,6 +43,7 @@ final class Message: Model, @unchecked Sendable {
         self.text = text
         self.isRead = isRead
         self.editedAt = nil
+        self.deletedAt = nil
     }
 }
 
@@ -49,11 +53,12 @@ extension Message {
         
         return try MessageResponse(
             id: requireID(),
-            text: text,
+            text: deletedAt == nil ? text : Constants.MESSAGE_DELETED_TEXT,
             senderID: $sender.id,
             isRead: isRead,
             createdAt: createdAt,
-            editedAt: editedAt
+            editedAt: editedAt,
+            deletedAt: deletedAt
         )
     }
 }

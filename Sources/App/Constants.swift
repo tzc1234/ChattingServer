@@ -14,6 +14,8 @@ enum Constants {
     static let REGISTER_PAYLOAD_MAX_SIZE: ByteCount = "1mb"
     
     static let EDITABLE_MESSAGE_INTERVAL: TimeInterval = 60 * 15
+    
+    static let MESSAGE_DELETED_TEXT = "Message deleted."
 }
 
 extension TimeInterval {

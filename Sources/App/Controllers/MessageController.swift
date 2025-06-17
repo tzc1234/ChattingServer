@@ -171,7 +171,7 @@ extension MessageController {
                         return
                     }
                     
-                    guard let message = try await messageRepository.getMessage(by: editMessage.messageID, userID: userID),
+                    guard let message = try await messageRepository.getUndeletedMessage(by: editMessage.messageID, userID: userID),
                           let createdAt = message.createdAt else {
                         throw MessageError.messageNotFound
                     }
@@ -185,7 +185,25 @@ extension MessageController {
                         message,
                         contactID: contactID
                     )
+                    let encoded = try await encoder.encode(messageResponseWithMetadata)
+                    let outgoingBinary = MessageChannelOutgoingBinary(type: .message, payload: encoded)
+                    await send(data: outgoingBinary.binaryData, for: contactID, logger: req.logger)
+                case .deleteMessage:
+                    guard let deleteMessage = try? decoder.decode(DeleteMessage.self, from: incomingBinary.payload) else {
+                        try? await close(ws, for: contactID, with: userID)
+                        return
+                    }
                     
+                    guard let message = try await messageRepository.getUndeletedMessage(by: deleteMessage.messageID, userID: userID) else {
+                        throw MessageError.messageNotFound
+                    }
+                    
+                    try await messageRepository.deleteMessage(message)
+                    
+                    let messageResponseWithMetadata = try await makeMessageResponseWithMetadata(
+                        message,
+                        contactID: contactID
+                    )
                     let encoded = try await encoder.encode(messageResponseWithMetadata)
                     let outgoingBinary = MessageChannelOutgoingBinary(type: .message, payload: encoded)
                     await send(data: outgoingBinary.binaryData, for: contactID, logger: req.logger)
