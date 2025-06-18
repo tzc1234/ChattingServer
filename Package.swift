@@ -8,14 +8,14 @@ let package = Package(
     ],
     dependencies: [
         // 💧 A server-side Swift web framework.
-        .package(url: "https://github.com/vapor/vapor.git", from: "4.106.7"),
+        .package(url: "https://github.com/vapor/vapor.git", from: "4.115.0"),
         // 🗄 An ORM for SQL and NoSQL databases.
-        .package(url: "https://github.com/vapor/fluent.git", from: "4.9.0"),
+        .package(url: "https://github.com/vapor/fluent.git", from: "4.12.0"),
         // 🪶 Fluent driver for SQLite.
-        .package(url: "https://github.com/vapor/fluent-sqlite-driver.git", from: "4.6.0"),
+        .package(url: "https://github.com/vapor/fluent-sqlite-driver.git", from: "4.8.1"),
         // 🔵 Non-blocking, event-driven networking for Swift. Used for custom executors
-        .package(url: "https://github.com/apple/swift-nio.git", from: "2.65.0"),
-        .package(url: "https://github.com/vapor/jwt.git", from: "5.1.0"),
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.83.0"),
+        .package(url: "https://github.com/vapor/jwt.git", from: "5.1.2"),
         .package(url: "https://github.com/vapor/apns.git", from: "4.2.0"),
     ],
     targets: [

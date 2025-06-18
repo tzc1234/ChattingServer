@@ -1,6 +1,7 @@
 import Foundation
 import Vapor
 import NIOCore
+import NIOFileSystem
 
 actor AvatarFileSaver {
     private let application: Application
@@ -39,9 +40,11 @@ actor AvatarFileSaver {
             )
         }
         
-        let handler = try NIOFileHandle(path: directoryPath + avatarFilename, mode: .write, flags: .allowFileCreation())
-        defer { try? handler.close() }
-        try await application.fileio.write(fileHandle: handler, buffer: avatar.data)
+        _ = try await FileSystem.shared.withFileHandle(
+            forWritingAt: .init(directoryPath + avatarFilename),
+            options: .newFile(replaceExisting: true)) { handle in
+                try await handle.write(contentsOf: avatar.data, toAbsoluteOffset: 0)
+            }
         
         return avatarFilename
     }

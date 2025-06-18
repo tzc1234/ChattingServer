@@ -165,4 +165,36 @@ actor MessageRepository {
     func create(_ message: Message) async throws {
         try await message.create(on: database)
     }
+    
+    func getUndeletedMessage(by messageID: Int, userID: UserID) async throws -> Message? {
+        try await Message.query(on: database)
+            .filter(\.$id == messageID)
+            .filter(\.$sender.$id == userID)
+            .filter(\.$deletedAt == nil)
+            .first()
+    }
+    
+    func editMessage(_ message: Message, newText: String) async throws {
+        let messageEditHistory = MessageEditHistory(
+            messageID: try message.requireID(),
+            previousText: message.text,
+            newText: newText
+        )
+        try await messageEditHistory.create(on: database)
+        
+        do {
+            message.text = newText
+            message.isRead = false
+            message.editedAt = messageEditHistory.editedAt
+            try await message.update(on: database)
+        } catch {
+            try? await messageEditHistory.delete(on: database)
+            throw error
+        }
+    }
+    
+    func deleteMessage(_ message: Message) async throws {
+        message.deletedAt = .now
+        try await message.update(on: database)
+    }
 }
