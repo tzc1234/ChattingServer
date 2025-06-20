@@ -138,6 +138,53 @@ actor ContactRepository {
         }
         return user1
     }
+    
+    struct SearchContactsResult {
+        let contacts: [Contact]
+        let hasMore: Bool
+    }
+    
+    func searchContacts(searchTerm: String, userID: Int, before: Date?, limit: Int) async throws -> SearchContactsResult {
+        let beforeLastUpdate: SQLQueryString = before.map { "AND last_update < \(bind: $0.timeIntervalSince1970)" } ?? ""
+        let contactsSQL: SQLQueryString = """
+            SELECT c.*, ifnull(max(m.created_at), c.created_at) AS last_update
+            FROM contacts c
+            LEFT JOIN messages m ON m.contact_id = c.id
+            LEFT JOIN users u ON (c.user_id1 = u.id AND c.user_id1 <> \(bind: userID)) 
+            OR (c.user_id2 = u.id AND c.user_id2 <> \(bind: userID))
+            GROUP BY c.id
+            HAVING (c.user_id1 = \(bind: userID) OR c.user_id2 = \(bind: userID))
+            AND c.blocked_by_user_id IS NULL
+            AND u.name LIKE \(bind: "%\(searchTerm)%") COLLATE NOCASE
+            \(beforeLastUpdate)
+            ORDER BY last_update DESC
+            LIMIT \(bind: limit)
+        """
+        let contactSQLRows = try await sqlDatabase().raw(contactsSQL).all()
+        let contacts = try contactSQLRows.map(decodeToContact)
+        
+        guard contacts.count == limit,
+              let lastUpdate = try contactSQLRows.last?.decode(column: "last_update", as: Double.self) else {
+            return SearchContactsResult(contacts: contacts, hasMore: false)
+        }
+        
+        let hasMoreSQL: SQLQueryString = """
+            SELECT COUNT(c.id), ifnull(max(m.created_at), c.created_at) AS last_update
+            FROM contacts c
+            LEFT JOIN messages m ON m.contact_id = c.id
+            LEFT JOIN users u ON (c.user_id1 = u.id AND c.user_id1 <> \(bind: userID)) 
+            OR (c.user_id2 = u.id AND c.user_id2 <> \(bind: userID))
+            GROUP BY c.id
+            HAVING (c.user_id1 = \(bind: userID) OR c.user_id2 = \(bind: userID))
+            AND c.blocked_by_user_id IS NULL
+            AND u.name LIKE \(bind: "%\(searchTerm)%") COLLATE NOCASE
+            AND last_update < \(bind: lastUpdate)
+            ORDER BY last_update DESC
+            LIMIT 1
+        """
+        let hasMore = try await sqlDatabase().raw(hasMoreSQL).first() != nil
+        return SearchContactsResult(contacts: contacts, hasMore: hasMore)
+    }
 }
 
 private extension SQLSelectBuilder {
