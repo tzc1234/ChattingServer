@@ -10,4 +10,9 @@ import Vapor
 struct SearchContactsResponse: Content {
     let contacts: [ContactResponse]
     let hasMore: Bool
+    
+    enum CodingKeys: String, CodingKey {
+        case contacts
+        case hasMore = "has_more"
+    }
 }
