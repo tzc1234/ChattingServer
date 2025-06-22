@@ -145,30 +145,17 @@ actor ContactRepository {
     }
     
     func searchContacts(searchTerm: String, userID: Int, before: Date?, limit: Int) async throws -> SearchContactsResult {
+        let oneMoreExtra = limit + 1
         let contactsSQL = searchContactsSQL(
             columns: "c.*",
             searchTerm: searchTerm,
             userID: userID,
             before: before?.timeIntervalSince1970, 
-            limitClause: "LIMIT \(bind: limit)"
+            limitClause: "LIMIT \(bind: oneMoreExtra)"
         )
-        let contactSQLRows = try await sqlDatabase().raw(contactsSQL).all()
-        let contacts = try contactSQLRows.map(decodeToContact)
-        
-        guard contacts.count == limit,
-              let lastUpdate = try contactSQLRows.last?.decode(column: "last_update", as: TimeInterval.self) else {
-            return SearchContactsResult(contacts: contacts, hasMore: false)
-        }
-        
-        let hasMoreSQL = searchContactsSQL(
-            columns: "COUNT(c.id)",
-            searchTerm: searchTerm,
-            userID: userID,
-            before: lastUpdate,
-            limitClause: "LIMIT 1"
-        )
-        let hasMore = try await sqlDatabase().raw(hasMoreSQL).first() != nil
-        return SearchContactsResult(contacts: contacts, hasMore: hasMore)
+        let contactRows = try await sqlDatabase().raw(contactsSQL).all()
+        let contacts = try contactRows.prefix(limit).map(decodeToContact)
+        return SearchContactsResult(contacts: contacts, hasMore: contactRows.count > limit)
     }
     
     private func searchContactsSQL(columns: SQLQueryString,
