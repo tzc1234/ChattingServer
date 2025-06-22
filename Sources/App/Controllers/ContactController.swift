@@ -141,7 +141,7 @@ struct ContactController {
             contactRepository: contactRepository,
             avatarLink: avatarLinkLoader.avatarLink()
         )
-        return SearchContactsResponse(contacts: response.contacts, hasMore: result.hasMore)
+        return SearchContactsResponse(contacts: response.contacts, hasMore: result.hasMore, total: result.total)
     }
 }
 

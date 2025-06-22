@@ -142,30 +142,45 @@ actor ContactRepository {
     struct SearchContactsResult {
         let contacts: [Contact]
         let hasMore: Bool
+        let total: Int
     }
     
     func searchContacts(searchTerm: String, userID: Int, before: Date?, limit: Int) async throws -> SearchContactsResult {
+        let totalSQL: SQLQueryString = """
+            SELECT COUNT(id) as count FROM (
+                SELECT c.id FROM contacts c
+                LEFT JOIN users u ON (c.user_id1 = u.id AND c.user_id1 <> \(bind: userID)) 
+                OR (c.user_id2 = u.id AND c.user_id2 <> \(bind: userID))
+                GROUP BY c.id
+                HAVING (c.user_id1 = \(bind: userID) OR c.user_id2 = \(bind: userID))
+                AND c.blocked_by_user_id IS NULL
+                AND u.name LIKE \(bind: "%\(searchTerm)%") COLLATE NOCASE
+            )
+        """
+        guard let total = try await sqlDatabase().raw(totalSQL).first()?.decode(column: "count", as: Int.self),
+              total > 0 else {
+            return SearchContactsResult(contacts: [], hasMore: false, total: 0)
+        }
+        
         let oneMoreExtra = limit + 1
         let contactsSQL = searchContactsSQL(
-            columns: "c.*",
             searchTerm: searchTerm,
             userID: userID,
             before: before?.timeIntervalSince1970, 
-            limitClause: "LIMIT \(bind: oneMoreExtra)"
+            limit: oneMoreExtra
         )
         let contactRows = try await sqlDatabase().raw(contactsSQL).all()
         let contacts = try contactRows.prefix(limit).map(decodeToContact)
-        return SearchContactsResult(contacts: contacts, hasMore: contactRows.count > limit)
+        return SearchContactsResult(contacts: contacts, hasMore: contactRows.count > limit, total: total)
     }
     
-    private func searchContactsSQL(columns: SQLQueryString,
-                                   searchTerm: String,
+    private func searchContactsSQL(searchTerm: String,
                                    userID: Int,
                                    before: TimeInterval?,
-                                   limitClause: SQLQueryString) -> SQLQueryString {
+                                   limit: Int) -> SQLQueryString {
         let beforeClause: SQLQueryString = before.map { "AND last_update < \(bind: $0)" } ?? ""
         return """
-            SELECT \(columns), ifnull(max(m.created_at), c.created_at) AS last_update
+            SELECT c.*, ifnull(max(m.created_at), c.created_at) AS last_update
             FROM contacts c
             LEFT JOIN messages m ON m.contact_id = c.id
             LEFT JOIN users u ON (c.user_id1 = u.id AND c.user_id1 <> \(bind: userID)) 
@@ -176,7 +191,7 @@ actor ContactRepository {
             AND u.name LIKE \(bind: "%\(searchTerm)%") COLLATE NOCASE
             \(beforeClause)
             ORDER BY last_update DESC
-            \(limitClause)
+            LIMIT \(bind: limit)
         """
     }
 }
