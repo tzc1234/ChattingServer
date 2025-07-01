@@ -124,6 +124,25 @@ struct ContactController {
             avatarLink: avatarLinkLoader.avatarLink()
         )
     }
+    
+    @Sendable func search(req: Request) async throws -> SearchContactsResponse {
+        let request = try req.query.decode(SearchContactsRequest.self)
+        let currentUserID = try req.auth.require(Payload.self).userID
+        
+        let result = try await contactRepository.searchContacts(
+            searchTerm: request.searchTerm,
+            userID: currentUserID,
+            before: request.before,
+            limit: request.limit ?? defaultLimit
+        )
+        
+        let response = try await result.contacts.toResponse(
+            currentUserID: currentUserID,
+            contactRepository: contactRepository,
+            avatarLink: avatarLinkLoader.avatarLink()
+        )
+        return SearchContactsResponse(contacts: response.contacts, hasMore: result.hasMore, total: result.total)
+    }
 }
 
 extension ContactController: RouteCollection {
@@ -133,6 +152,7 @@ extension ContactController: RouteCollection {
         
         protected.get(use: index)
         protected.post(use: create)
+        protected.get("search", use: search)
         
         protected.group(":contact_id") { routes in
             routes.patch("block", use: block)
