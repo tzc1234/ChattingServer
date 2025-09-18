@@ -5,4 +5,3 @@ extension SHA256 {
         Self.hash(data: Data(text.utf8)).hex
     }
 }
-

@@ -40,7 +40,7 @@ actor DefaultAPNSHandler: APNSHandler {
         
         let apnsConfig = APNSClientConfiguration(
             authenticationMethod: .jwt(
-                privateKey: try .loadFrom(string: String(contentsOfFile: configuration.keyP8FilePath)),
+                privateKey: try .loadFrom(string: String(contentsOfFile: configuration.keyP8FilePath, encoding: .utf8)),
                 keyIdentifier: configuration.keyID,
                 teamIdentifier: configuration.teamID
             ),

@@ -4,17 +4,17 @@ import PackageDescription
 let package = Package(
     name: "ChattingServer",
     platforms: [
-       .macOS(.v13)
+       .macOS(.v15)
     ],
     dependencies: [
         // 💧 A server-side Swift web framework.
-        .package(url: "https://github.com/vapor/vapor.git", from: "4.115.0"),
+        .package(url: "https://github.com/vapor/vapor.git", from: "4.117.0"),
         // 🗄 An ORM for SQL and NoSQL databases.
         .package(url: "https://github.com/vapor/fluent.git", from: "4.12.0"),
         // 🪶 Fluent driver for SQLite.
         .package(url: "https://github.com/vapor/fluent-sqlite-driver.git", from: "4.8.1"),
         // 🔵 Non-blocking, event-driven networking for Swift. Used for custom executors
-        .package(url: "https://github.com/apple/swift-nio.git", from: "2.83.0"),
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.86.0"),
         .package(url: "https://github.com/vapor/jwt.git", from: "5.1.2"),
         .package(url: "https://github.com/vapor/apns.git", from: "4.2.0"),
     ],
@@ -41,10 +41,9 @@ let package = Package(
             swiftSettings: swiftSettings
         )
     ],
-    swiftLanguageModes: [.v5]
+    swiftLanguageModes: [.v6]
 )
 
 var swiftSettings: [SwiftSetting] { [
-    .enableUpcomingFeature("DisableOutwardActorInference"),
     .enableExperimentalFeature("StrictConcurrency"),
 ] }
